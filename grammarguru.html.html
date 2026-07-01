@@ -1,0 +1,1526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>GrammarGuru</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/opendyslexic@5.0.13/400.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/opendyslexic@5.0.13/700.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  /* ---- Design tokens ------------------------------------------------- */
+  :root{
+    --bg:#F2F3F9; --surface:#FFFFFF; --surface-2:#F7F8FC;
+    --ink:#1E2340; --muted:#6A6F8C; --line:#E5E7F1;
+    --primary:#4B5FD6; --primary-press:#3a4cc0;
+    --highlight:#FFD84D;
+    --success:#2FA36B; --error:#D7553B;
+    --radius:16px; --radius-sm:11px;
+    --reading-size:18px; --reading-line:1.7; --reading-letter:0px; --reading-word:0px;
+    --reading-font:"Lexend";
+    --app-font:"Lexend",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --shadow:0 1px 2px rgba(30,35,64,.06), 0 8px 24px rgba(30,35,64,.06);
+    --speed:.2s;
+  }
+  /* Whole-app font choice */
+  body[data-font="system"]{ --app-font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; --reading-font:inherit; }
+  body[data-font="atkinson"]{ --app-font:"Atkinson Hyperlegible",-apple-system,system-ui,sans-serif; --reading-font:"Atkinson Hyperlegible"; }
+  body[data-font="dyslexic"]{ --app-font:"OpenDyslexic","Comic Sans MS",-apple-system,system-ui,sans-serif; --reading-font:"OpenDyslexic","Comic Sans MS",sans-serif; }
+  body[data-font="lexend"], body:not([data-font]){ --app-font:"Lexend",-apple-system,system-ui,sans-serif; --reading-font:"Lexend"; }
+
+  /* Reading tints (comfort) */
+  body[data-tint="cream"]{ --bg:#F7F2E6; --surface:#FBF7EC; --surface-2:#F4EEDD; --ink:#2A2620; --line:#E7DEC8; }
+  body[data-tint="sepia"]{ --bg:#F1E7D6; --surface:#F6EEDF; --surface-2:#EEE3CF; --ink:#322A1E; --line:#E0D2B8; }
+  body[data-tint="mint"]{  --bg:#E7F3EC; --surface:#F1F8F3; --surface-2:#E1EFE7; --ink:#16271E; --line:#CDE6D7; }
+  body[data-tint="lowblue"]{ --bg:#F1EFE6; --surface:#F6F3EA; --surface-2:#EDEADF; --ink:#2A271E; --line:#DED9C6; }
+  body[data-tint="dark"]{ --bg:#15161C; --surface:#1E1F28; --surface-2:#23242F; --ink:#ECECEF; --muted:#9A9CB0; --line:#2E3040; --shadow:0 1px 2px rgba(0,0,0,.4); }
+
+  /* High contrast */
+  body.contrast{ --ink:#101018; --muted:#3a3d52; --line:#9498b5; --surface:#fff; --surface-2:#eef0f7; }
+  body.contrast[data-tint="dark"]{ --ink:#fff; --muted:#cfd2e6; --line:#7a7e9c; --surface:#000; --surface-2:#15161c; }
+  body.contrast :focus-visible{outline-width:4px}
+
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:var(--app-font);
+    background:var(--bg); color:var(--ink);
+    -webkit-font-smoothing:antialiased; line-height:1.5;
+    padding-bottom:calc(72px + env(safe-area-inset-bottom));
+  }
+  @media (prefers-reduced-motion: reduce){ *{transition:none!important; animation:none!important} }
+  body.calm *{transition:none!important}
+
+  button{font-family:inherit; cursor:pointer; color:inherit}
+  :focus-visible{outline:3px solid var(--primary); outline-offset:2px; border-radius:6px}
+
+  /* ---- App bar ------------------------------------------------------- */
+  .appbar{
+    position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:10px;
+    padding:calc(12px + env(safe-area-inset-top)) 16px 12px;
+    background:color-mix(in srgb, var(--bg) 86%, transparent);
+    backdrop-filter:saturate(1.4) blur(10px); border-bottom:1px solid var(--line);
+  }
+  .brand{display:flex; align-items:center; gap:9px; font-weight:600; letter-spacing:-.01em}
+  .brand .mark{ width:30px;height:30px;border-radius:9px;display:grid;place-items:center;
+    background:linear-gradient(145deg,var(--primary),#6f7ff0); color:#fff; font-weight:700; font-size:16px; box-shadow:0 2px 8px rgba(75,95,214,.45); }
+  .brand b{font-size:18px}
+  .brand .hl{ background:linear-gradient(transparent 58%, var(--highlight) 58%); padding:0 1px; border-radius:2px}
+  .spacer{flex:1}
+  .iconbtn{ border:1px solid var(--line); background:var(--surface); height:40px;border-radius:11px; padding:0 12px;
+    display:inline-flex;align-items:center;gap:7px; font-size:16px; font-weight:600; box-shadow:var(--shadow); }
+  .iconbtn .lbl{font-size:13px}
+  .iconbtn:active{transform:translateY(1px)}
+
+  main{max-width:760px; margin:0 auto; padding:16px; position:relative}
+
+  /* ---- Onboarding ---------------------------------------------------- */
+  .onboard{background:linear-gradient(160deg,var(--surface),var(--surface-2)); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:18px; margin-bottom:16px}
+  .onboard h2{margin:0 0 4px; font-size:18px; letter-spacing:-.01em}
+  .onboard p{margin:0 0 13px; color:var(--muted); font-size:14px; line-height:1.5}
+  .preset-row{display:flex; gap:9px; flex-wrap:wrap}
+  .preset{flex:1 1 calc(50% - 9px); min-width:140px; text-align:left; border:1.5px solid var(--line); background:var(--surface);
+    border-radius:13px; padding:12px 13px; box-shadow:var(--shadow); display:flex; gap:10px; align-items:center}
+  .preset:active{transform:translateY(1px)}
+  .preset .pic{font-size:22px; flex:none}
+  .preset .pt{font-weight:600; font-size:14px; display:block}
+  .preset .ps{color:var(--muted); font-size:12px; line-height:1.35; display:block; margin-top:1px}
+  .onboard .skip{margin-top:12px; border:none; background:none; color:var(--primary); font-weight:600; font-size:14px; padding:6px 2px}
+
+  /* ---- Mode switch (Basics vs Grammar) ------------------------------ */
+  .modeswitch{display:flex;gap:10px;margin:4px 0 16px}
+  .modebtn{flex:1;display:flex;gap:10px;align-items:center;border:1.5px solid var(--line);background:var(--surface);border-radius:14px;padding:13px;box-shadow:var(--shadow);text-align:left}
+  .modebtn[aria-pressed="true"]{border-color:var(--primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 30%,transparent),var(--shadow)}
+  .modebtn:active{transform:translateY(1px)}
+  .modebtn .mi{font-size:24px;flex:none}
+  .modebtn .mt{font-weight:700;font-size:15px;display:block}
+  .modebtn .msub{color:var(--muted);font-size:12px;display:block;margin-top:1px}
+  .ex-emoji{font-size:36px;line-height:1.1;margin-bottom:6px}
+
+  /* ---- Segmented level control -------------------------------------- */
+  .segmented{display:flex; background:var(--surface-2); border:1px solid var(--line); border-radius:13px; padding:4px; gap:4px; margin:4px 0 18px}
+  .segmented button{flex:1; border:none; background:transparent; padding:10px 6px; border-radius:9px; font-weight:600; font-size:14px; color:var(--muted)}
+  .segmented button[aria-selected="true"]{background:var(--surface); color:var(--ink); box-shadow:var(--shadow)}
+
+  .levelhead{margin:2px 0 12px}
+  .levelhead h2{margin:0 0 3px; font-size:20px; letter-spacing:-.01em}
+  .levelhead p{margin:0; color:var(--muted); font-size:14px}
+
+  /* ---- Lesson cards -------------------------------------------------- */
+  .card{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:16px; margin-bottom:12px; }
+  .lessoncard{display:flex; align-items:center; gap:14px; width:100%; text-align:left; border:1px solid var(--line);
+    background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow); padding:16px; margin-bottom:11px; min-height:64px}
+  .lessoncard:active{transform:translateY(1px)}
+  .lessoncard .num{ width:42px;height:42px;flex:none;border-radius:12px;display:grid;place-items:center;font-weight:700;
+    background:var(--surface-2); color:var(--primary); border:1px solid var(--line); font-variant-numeric:tabular-nums; font-size:17px;}
+  .lessoncard.done .num{background:var(--success); color:#fff; border-color:transparent}
+  .lessoncard .meta{flex:1; min-width:0}
+  .lessoncard .meta h3{margin:0 0 2px; font-size:16px; letter-spacing:-.01em}
+  .lessoncard .meta span{color:var(--muted); font-size:13px}
+  .lessoncard .chev{color:var(--muted); font-size:22px}
+
+  .progress-strip{display:flex; align-items:center; gap:10px; margin:0 0 16px; color:var(--muted); font-size:13px}
+  .bar{flex:1; height:9px; background:var(--surface-2); border:1px solid var(--line); border-radius:99px; overflow:hidden}
+  .bar > i{display:block; height:100%; background:linear-gradient(90deg,var(--primary),#7d8bf0); width:0; transition:width .4s}
+
+  /* ---- Lesson detail ------------------------------------------------- */
+  .backbtn{display:inline-flex; align-items:center; gap:6px; border:none; background:none; color:var(--primary); font-weight:600; font-size:15px; padding:8px 0; margin-bottom:6px}
+  .eyebrow{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--primary);margin-bottom:8px}
+  .lesson-title{font-size:24px; line-height:1.25; letter-spacing:-.02em; margin:0 0 14px}
+
+  .reading{ font-size:var(--reading-size); line-height:var(--reading-line); letter-spacing:var(--reading-letter); word-spacing:var(--reading-word); font-family:var(--reading-font); }
+  .tok.spoken{ background:var(--highlight); border-radius:4px; box-shadow:0 0 0 3px var(--highlight); color:#1E2340 }
+  body[data-tint="dark"] .tok.spoken{ color:#15161C }
+
+  .playrow{display:flex; align-items:flex-start; gap:12px}
+  .play{ flex:none; width:48px;height:48px;border-radius:50%; border:none; color:#fff;
+    background:linear-gradient(145deg,var(--primary),#6f7ff0); display:grid;place-items:center; font-size:20px; box-shadow:0 4px 14px rgba(75,95,214,.4); }
+  .play.playing{background:linear-gradient(145deg,#e0573e,#f07a63); box-shadow:0 4px 14px rgba(215,85,59,.45)}
+  .play:active{transform:scale(.94)}
+  .play.sm{width:42px;height:42px;font-size:17px}
+
+  .section-label{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:22px 2px 10px}
+  .keypoint{display:flex; gap:10px; align-items:flex-start; margin:9px 0}
+  .keypoint .dot{color:var(--success); margin-top:3px}
+  .example{display:flex; gap:12px; align-items:flex-start; background:var(--surface-2); border:1px solid var(--line); border-radius:13px; padding:14px; margin-bottom:10px}
+  .example.playing{border-color:var(--primary); background:color-mix(in srgb, var(--primary) 8%, var(--surface))}
+  .example .note{color:var(--muted); font-size:13px; margin-top:7px; line-height:1.5}
+  .example .slow{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);margin-top:7px}
+
+  /* Spotlight: dim everything except the active block */
+  #app.spotlight-active .dimunit{opacity:.32; transition:opacity var(--speed)}
+  #app.spotlight-active .dimunit.spotlit{opacity:1}
+
+  .actions{display:flex; gap:10px; margin:22px 0 4px; flex-wrap:wrap}
+  .btn{flex:1; min-width:140px; border:1px solid var(--line); background:var(--surface); color:var(--ink); font-weight:600; font-size:15px; padding:15px; border-radius:13px; box-shadow:var(--shadow); display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:52px}
+  .btn.primary{background:linear-gradient(145deg,var(--primary),#6f7ff0); color:#fff; border-color:transparent}
+  .btn.success{background:var(--success); color:#fff; border-color:transparent}
+  .btn:active{transform:translateY(1px)}
+  .btn[disabled]{opacity:.5}
+
+  .lessonbar{display:flex;gap:10px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:11px 13px;box-shadow:var(--shadow);margin-bottom:16px}
+  .lessonbar .label{font-weight:600;font-size:14px;flex:1}
+
+  /* Focus mode pager */
+  .stepdots{display:flex;gap:6px;margin:0 0 14px;flex-wrap:wrap}
+  .stepdots .d{height:6px;flex:1;min-width:10px;border-radius:99px;background:var(--surface-2);border:1px solid var(--line)}
+  .stepdots .d.past{background:color-mix(in srgb,var(--primary) 45%,var(--surface))}
+  .stepdots .d.on{background:var(--primary)}
+  .focusstage{min-height:120px}
+
+  /* ---- Quiz ---------------------------------------------------------- */
+  .qprompt{font-size:18px; font-weight:600; line-height:1.4; margin:4px 0 14px; letter-spacing:-.01em}
+  .opt{display:block;width:100%;text-align:left;border:1.5px solid var(--line);background:var(--surface);border-radius:12px;padding:15px;margin-bottom:10px;font-size:15.5px;font-weight:500;min-height:54px}
+  .opt:active{transform:translateY(1px)}
+  .opt.correct{border-color:var(--success);background:color-mix(in srgb,var(--success) 14%,var(--surface))}
+  .opt.wrong{border-color:var(--error);background:color-mix(in srgb,var(--error) 12%,var(--surface))}
+  .opt .tick{float:right;font-weight:700}
+  .feedback{border-radius:12px;padding:13px 14px;margin:6px 0 4px;font-size:14.5px;line-height:1.5}
+  .feedback.good{background:color-mix(in srgb,var(--success) 12%,var(--surface));border:1px solid color-mix(in srgb,var(--success) 40%,var(--line))}
+  .feedback.bad{background:color-mix(in srgb,var(--error) 9%,var(--surface));border:1px solid color-mix(in srgb,var(--error) 35%,var(--line))}
+  .qcount{color:var(--muted);font-size:13px;font-weight:600;margin-bottom:10px}
+
+  /* ---- Badges -------------------------------------------------------- */
+  .badgegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:11px}
+  .badge{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;text-align:center;box-shadow:var(--shadow)}
+  .badge .ic{font-size:28px}
+  .badge h4{margin:8px 0 3px;font-size:14px}
+  .badge p{margin:0;color:var(--muted);font-size:12px;line-height:1.4}
+  .badge.locked{opacity:.5; filter:grayscale(.7)}
+  .cert{background:linear-gradient(160deg,var(--surface),var(--surface-2));border:1.5px solid var(--primary);border-radius:16px;padding:20px;text-align:center;box-shadow:var(--shadow);margin-bottom:12px}
+  .cert .seal{font-size:34px}
+  .cert h3{margin:8px 0 4px}
+  .cert p{margin:0;color:var(--muted);font-size:13px}
+
+  /* ---- Tab bar ------------------------------------------------------- */
+  .tabbar{position:fixed; left:0; right:0; bottom:0; z-index:30; display:flex; justify-content:space-around;
+    background:color-mix(in srgb,var(--surface) 92%, transparent); backdrop-filter:blur(12px);
+    border-top:1px solid var(--line); padding:8px 8px calc(8px + env(safe-area-inset-bottom))}
+  .tabbar button{border:none;background:none;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:600;color:var(--muted);padding:6px 16px;border-radius:10px}
+  .tabbar button[aria-current="true"]{color:var(--primary)}
+  .tabbar .ti{font-size:20px}
+
+  /* ---- Settings sheet ------------------------------------------------ */
+  .scrim{position:fixed;inset:0;background:rgba(15,17,28,.45);z-index:40;opacity:0;pointer-events:none;transition:opacity var(--speed)}
+  .scrim.open{opacity:1;pointer-events:auto}
+  .sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;max-height:90vh;overflow:auto;
+    background:var(--surface);border-radius:20px 20px 0 0;border-top:1px solid var(--line);
+    transform:translateY(100%);transition:transform var(--speed) ease;padding:8px 18px calc(22px + env(safe-area-inset-bottom))}
+  .sheet.open{transform:translateY(0)}
+  .grab{width:42px;height:5px;border-radius:99px;background:var(--line);margin:8px auto 12px}
+  .sheet h3{margin:16px 0 2px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .preview{background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:14px;margin:8px 0 4px}
+  .preview .reading{margin:0}
+  .preset-mini{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 2px}
+  .preset-mini button{flex:1 1 calc(50% - 8px);min-width:130px;border:1.5px solid var(--line);background:var(--surface);border-radius:11px;padding:11px;font-weight:600;font-size:13.5px;box-shadow:var(--shadow);display:flex;align-items:center;gap:8px}
+  .preset-mini button:active{transform:translateY(1px)}
+  .set-group{padding:6px 0 14px;border-bottom:1px solid var(--line)}
+  .set-group:last-of-type{border-bottom:none}
+  .set-row{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:13px 0}
+  .set-row label{font-size:14.5px;font-weight:500}
+  .set-row .sub{display:block;color:var(--muted);font-size:12px;font-weight:400;margin-top:2px;max-width:200px}
+  input[type="range"]{width:150px;accent-color:var(--primary);height:26px}
+  select{font-family:inherit;font-size:14px;padding:10px 11px;border-radius:9px;border:1px solid var(--line);background:var(--surface);color:var(--ink);max-width:175px}
+  .sw{position:relative;width:52px;height:32px;flex:none}
+  .sw input{opacity:0;width:100%;height:100%;margin:0;position:absolute;z-index:2}
+  .sw .track{position:absolute;inset:0;background:var(--line);border-radius:99px;transition:background var(--speed)}
+  .sw .knob{position:absolute;top:3px;left:3px;width:26px;height:26px;background:#fff;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform var(--speed)}
+  .sw input:checked + .track{background:var(--primary)}
+  .sw input:checked + .track + .knob{transform:translateX(20px)}
+  .tintrow{display:flex;gap:9px;flex-wrap:wrap;margin:10px 0 18px}
+  .swatch{width:44px;height:44px;border-radius:11px;border:2px solid var(--line);position:relative}
+  .swatch[aria-pressed="true"]{border-color:var(--primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 40%,transparent)}
+  .swatch span{position:absolute;bottom:-17px;left:0;right:0;text-align:center;font-size:10px;color:var(--muted)}
+
+  .empty{color:var(--muted);text-align:center;padding:30px 10px;font-size:14px}
+  .bionic-b{font-weight:800}
+  .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--bg);
+    padding:12px 18px;border-radius:13px;font-size:14px;font-weight:600;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:all .3s;z-index:50;max-width:90vw;text-align:center}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* ---- Profiles / sign-in ------------------------------------------- */
+  body[data-screen="profiles"] .tabbar,
+  body[data-screen="cloudauth"] .tabbar,
+  body[data-screen="account"] .tabbar{display:none}
+  body[data-screen="profiles"] #profileBtn,
+  body[data-screen="profiles"] #settingsBtn,
+  body[data-screen="cloudauth"] #profileBtn,
+  body[data-screen="cloudauth"] #settingsBtn{display:none}
+  .autherr{background:color-mix(in srgb,var(--error) 10%,var(--surface));border:1px solid color-mix(in srgb,var(--error) 40%,var(--line));color:var(--ink);border-radius:11px;padding:11px 13px;font-size:13.5px;line-height:1.45;margin:12px 0 2px}
+
+  /* ---- Voice tip ----------------------------------------------------- */
+  .voicetip{font-size:12.5px;line-height:1.55;color:var(--muted);background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:11px 12px;margin:10px 0 2px}
+  .voicetip b{color:var(--ink)}
+
+  /* ---- Speak & Check ------------------------------------------------- */
+  .micwrap{display:flex;flex-direction:column;align-items:center;gap:10px;padding:6px 0 14px}
+  .micbtn{width:84px;height:84px;border-radius:50%;border:none;color:#fff;font-size:34px;background:linear-gradient(145deg,var(--primary),#6f7ff0);box-shadow:0 8px 22px rgba(75,95,214,.45)}
+  .micbtn:active{transform:scale(.96)}
+  .micbtn.on{background:linear-gradient(145deg,#e0573e,#f07a63);box-shadow:0 0 0 0 rgba(224,87,62,.5);animation:pulse 1.4s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(224,87,62,.45)}70%{box-shadow:0 0 0 18px rgba(224,87,62,0)}100%{box-shadow:0 0 0 0 rgba(224,87,62,0)}}
+  .micstatus{font-size:13.5px;color:var(--muted);font-weight:600}
+  .micbanner{font-size:13px;line-height:1.5;background:color-mix(in srgb,var(--primary) 8%,var(--surface));border:1px solid color-mix(in srgb,var(--primary) 30%,var(--line));border-radius:12px;padding:12px 13px;margin:0 0 12px}
+  .micbanner b{color:var(--ink)}
+  .speakbox{width:100%;font-family:var(--reading-font);font-size:var(--reading-size);line-height:var(--reading-line);border:1.5px solid var(--line);border-radius:12px;padding:13px;background:var(--surface-2);color:var(--ink);resize:vertical;min-height:120px}
+  .fixrow{padding:11px 0;border-bottom:1px solid var(--line)}
+  .fixrow:last-child{border-bottom:none}
+  .fixhead{font-size:16px;font-weight:600}
+  .fixfrom{text-decoration:line-through;color:var(--error)}
+  .fixto{color:var(--success);font-weight:700}
+  .fixarrow{color:var(--muted)}
+  .fixnote{color:var(--muted);font-size:13px;margin-top:3px;line-height:1.45}
+  .authwrap{max-width:540px;margin:6px auto;text-align:center}
+  .authmark{width:54px;height:54px;border-radius:16px;margin:6px auto 14px;display:grid;place-items:center;font-weight:700;font-size:26px;color:#fff;background:linear-gradient(145deg,var(--primary),#6f7ff0);box-shadow:0 6px 18px rgba(75,95,214,.4)}
+  .authtitle{margin:0 0 4px;font-size:24px;letter-spacing:-.02em}
+  .authsub{margin:0 auto;max-width:420px;color:var(--muted);font-size:14.5px;line-height:1.5}
+  .profilegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px;margin:20px 0 6px}
+  .profilecard{display:flex;flex-direction:column;align-items:center;gap:4px;border:1.5px solid var(--line);background:var(--surface);border-radius:16px;padding:18px 12px;box-shadow:var(--shadow)}
+  .profilecard:active{transform:translateY(1px)}
+  .profilecard .pav{font-size:38px;line-height:1}
+  .profilecard .pname{font-weight:700;font-size:15px;margin-top:4px}
+  .profilecard .pmeta{color:var(--muted);font-size:12px}
+  .profilecard.add{border-style:dashed;justify-content:center;color:var(--primary)}
+  .profilecard.add .pav{color:var(--primary)}
+  .authlink{border:none;background:none;color:var(--primary);font-weight:600;font-size:14.5px;padding:12px;margin-top:6px}
+  .authnote{color:var(--muted);font-size:12.5px;line-height:1.5;margin-top:18px}
+  .authform{text-align:left;margin-top:18px}
+  .minilabel{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:6px 2px}
+  .avatarrow{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 6px}
+  .avbtn{width:46px;height:46px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-size:24px;display:grid;place-items:center}
+  .avbtn[aria-pressed="true"]{border-color:var(--primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 35%,transparent)}
+  .nameinput{width:100%;font-family:inherit;font-size:16px;padding:13px 14px;border:1.5px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink)}
+  .tutorrow{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}
+  .tutorrow:last-child{border-bottom:none}
+  .tav{font-size:30px;flex:none}
+  .tinfo{flex:1;min-width:0}
+  .tname{font-weight:700;font-size:15px}
+  .tstat{color:var(--muted);font-size:12.5px;margin-top:1px}
+  .tdel{border:1px solid var(--line);background:var(--surface);color:var(--muted);width:32px;height:32px;border-radius:9px;flex:none;font-size:13px}
+</style>
+</head>
+<body>
+  <div class="appbar">
+    <div class="brand"><span class="mark">G</span><b>Grammar<span class="hl">Guru</span></b></div>
+    <div class="spacer"></div>
+    <button class="iconbtn" id="profileBtn" aria-label="Switch learner"><span id="profileAvatar">🙂</span><span class="lbl" id="profileName">Profile</span></button>
+    <button class="iconbtn" id="settingsBtn" aria-label="Reading and speech settings">⚙️<span class="lbl">Comfort</span></button>
+  </div>
+
+  <main id="app"></main>
+
+  <nav class="tabbar" id="tabbar">
+    <button data-tab="learn" aria-current="true"><span class="ti">📚</span>Learn</button>
+    <button data-tab="speak"><span class="ti">🎤</span>Speak</button>
+    <button data-tab="awards"><span class="ti">🏆</span>Awards</button>
+  </nav>
+
+  <!-- Settings -->
+  <div class="scrim" id="scrim"></div>
+  <section class="sheet" id="sheet" aria-label="Comfort settings" role="dialog" aria-modal="true">
+    <div class="grab"></div>
+
+    <h3>Quick comfort profiles</h3>
+    <div class="preset-mini" id="presetMini"></div>
+
+    <div class="preview" aria-hidden="true"><div class="reading" id="previewText"></div></div>
+
+    <h3>Reading</h3>
+    <div class="set-group">
+      <div class="set-row"><label>Font</label><select id="fontSel">
+        <option value="lexend">Lexend (clear)</option>
+        <option value="dyslexic">OpenDyslexic</option>
+        <option value="atkinson">Atkinson Hyperlegible</option>
+        <option value="system">System default</option>
+      </select></div>
+      <div class="set-row"><label>Text size</label><input type="range" id="sizeR" min="15" max="32" step="1"></div>
+      <div class="set-row"><label>Line spacing</label><input type="range" id="lineR" min="1.3" max="2.6" step="0.1"></div>
+      <div class="set-row"><label>Letter spacing</label><input type="range" id="letterR" min="0" max="4" step="0.25"></div>
+      <div class="set-row"><label>Word spacing</label><input type="range" id="wordR" min="0" max="12" step="1"></div>
+      <div class="set-row"><label>Bionic reading<span class="sub">Bold the start of each word to anchor the eye</span></label>
+        <span class="sw"><input type="checkbox" id="bionicT"><span class="track"></span><span class="knob"></span></span></div>
+      <div class="set-row"><label>High contrast<span class="sub">Stronger text and edges</span></label>
+        <span class="sw"><input type="checkbox" id="contrastT"><span class="track"></span><span class="knob"></span></span></div>
+      <label style="font-size:14.5px;font-weight:500">Colour tint</label>
+      <div class="tintrow" id="tintRow"></div>
+    </div>
+
+    <h3>Focus</h3>
+    <div class="set-group">
+      <div class="set-row"><label>Focus mode<span class="sub">Show one step at a time, not a long page</span></label>
+        <span class="sw"><input type="checkbox" id="focusT"><span class="track"></span><span class="knob"></span></span></div>
+      <div class="set-row"><label>Spotlight reading<span class="sub">Dim everything except the line being read</span></label>
+        <span class="sw"><input type="checkbox" id="spotT"><span class="track"></span><span class="knob"></span></span></div>
+      <div class="set-row"><label>Calm mode<span class="sub">Remove animations for a quieter screen</span></label>
+        <span class="sw"><input type="checkbox" id="calmT"><span class="track"></span><span class="knob"></span></span></div>
+      <div class="set-row"><label>Low-pressure quizzes<span class="sub">Hide scores; gentle feedback only</span></label>
+        <span class="sw"><input type="checkbox" id="lowpT"><span class="track"></span><span class="knob"></span></span></div>
+    </div>
+
+    <h3>Read-aloud</h3>
+    <div class="set-group">
+      <div class="set-row"><label>Read-along highlight<span class="sub">Light up each word as it is spoken</span></label>
+        <span class="sw"><input type="checkbox" id="hlT" checked><span class="track"></span><span class="knob"></span></span></div>
+      <div class="set-row"><label>Speaking speed</label><input type="range" id="rateR" min="0.5" max="1.2" step="0.05"></div>
+      <div class="set-row"><label>Pitch</label><input type="range" id="pitchR" min="0.7" max="1.5" step="0.05"></div>
+      <div class="set-row"><label>Voice</label><select id="voiceSel"></select></div>
+      <div class="set-row"><label>Test voice<span class="sub">Hear a sample with current settings</span></label>
+        <button class="play sm" id="testVoice" aria-label="Test voice">▶</button></div>
+      <p class="voicetip" id="voiceTip">💡 <b>Want an even more human voice?</b> Voices marked ✨ are the most natural. To add more: on <b>iPhone/iPad</b> go to Settings → Accessibility → Spoken Content → Voices → English (UK) and download an <b>Enhanced</b> or <b>Premium</b> voice. On <b>Windows</b>, Settings → Time &amp; language → Speech → add a <b>Natural</b> voice. On <b>Mac</b>, System Settings → Accessibility → Spoken Content → System voice → Manage Voices. Then pick it above.</p>
+    </div>
+    <div class="actions"><button class="btn primary" id="closeSheet">Done</button></div>
+  </section>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+/* ===== Crash reporter (shows real errors instead of dead buttons) ==== */
+(function(){
+  function showFatal(msg){
+    try{
+      var d=document.getElementById("ggFatal");
+      if(!d){ d=document.createElement("div"); d.id="ggFatal";
+        d.setAttribute("style","position:fixed;left:8px;right:8px;top:8px;z-index:99999;background:#b00020;color:#fff;padding:12px 14px;border-radius:12px;font:13px/1.45 -apple-system,system-ui,sans-serif;white-space:pre-wrap;box-shadow:0 6px 18px rgba(0,0,0,.3)");
+        (document.body||document.documentElement).appendChild(d);
+      }
+      d.textContent="⚠ A problem stopped the app:\n"+msg+"\n\nPlease screenshot this and send it back.";
+    }catch(_){}
+  }
+  window.addEventListener("error", function(e){ showFatal((e.message||"error")+(e.lineno?("  (line "+e.lineno+")"):"")); });
+  window.addEventListener("unhandledrejection", function(e){ var r=e&&e.reason; showFatal("background task: "+((r&&r.message)||r||"unknown")); });
+  window.__ggShowFatal=showFatal;
+})();
+
+/* ===== Data ========================================================== */
+const LESSONS = [{"level":"foundation","title":"Nouns: Naming Words","summary":"A noun names a person, place, thing, or idea.","explanation":["A noun is a naming word. If you can put 'the' or 'a' in front of it, it is usually a noun.","Common nouns name general things (dog, city, hope). Proper nouns name specific ones and start with a capital letter (Rex, London, Monday)."],"keyPoints":["Nouns name people, places, things, and ideas.","Proper nouns always take a capital letter.","Abstract nouns name things you cannot touch, like courage or freedom."],"examples":[{"text":"The dog ran across the park.","highlight":"dog","note":"‘dog’ is a common noun — a general thing."},{"text":"Sarah visited Paris in April.","highlight":"Sarah","note":"‘Sarah’ and ‘Paris’ are proper nouns, so they are capitalised."},{"text":"Her kindness surprised everyone.","highlight":"kindness","note":"‘kindness’ is an abstract noun — an idea you cannot touch."},{"text":"We bought three apples and a loaf of bread.","highlight":"apples","note":"Nouns can be counted (apples) or uncountable (bread)."}],"quiz":[{"prompt":"Which word is a proper noun?","options":["river","Thames","water","boat"],"correctIndex":1,"explanation":"‘Thames’ names a specific river, so it is a proper noun and is capitalised."},{"prompt":"Which is an abstract noun?","options":["table","freedom","shoe","river"],"correctIndex":1,"explanation":"‘Freedom’ is an idea you cannot touch — an abstract noun."}],"estimatedMinutes":4,"id":0},{"level":"foundation","title":"Pronouns: Word Stand-ins","summary":"Pronouns replace nouns so we don’t repeat them.","explanation":["A pronoun stands in for a noun. Instead of saying ‘Maria likes Maria’s book’, we say ‘Maria likes her book’.","Common pronouns include I, you, he, she, it, we, they, and their forms like him, her, and them."],"keyPoints":["Pronouns replace nouns to avoid repetition.","Match the pronoun to who or what it replaces.","‘They’ can refer to one person whose gender is unknown."],"examples":[{"text":"Tom lost his keys, so he went back inside.","highlight":"he","note":"‘he’ stands in for ‘Tom’."},{"text":"The cats were hungry, so we fed them.","highlight":"them","note":"‘them’ replaces ‘the cats’."},{"text":"Someone left their umbrella by the door.","highlight":"their","note":"Singular ‘their’ works when we don’t know the person."},{"text":"This is the bag that I bought yesterday.","highlight":"that","note":"‘that’ is a relative pronoun linking two ideas."}],"quiz":[{"prompt":"Choose the correct pronoun: ‘Anna and ___ went home.’","options":["I","me","myself","mine"],"correctIndex":0,"explanation":"Use ‘I’ as the subject. Test it by removing ‘Anna and’: ‘I went home.’"}],"estimatedMinutes":4,"id":1},{"level":"foundation","title":"Verbs: Action & Being","summary":"Verbs show what someone does or what state they are in.","explanation":["A verb expresses an action (run, eat, think) or a state of being (is, seem, become).","Every complete sentence needs at least one verb."],"keyPoints":["Action verbs show what happens: jump, write, sing.","Linking verbs join the subject to a description: is, are, was.","A sentence without a verb is incomplete."],"examples":[{"text":"The children laughed at the clown.","highlight":"laughed","note":"‘laughed’ is an action verb."},{"text":"The soup is hot.","highlight":"is","note":"‘is’ links ‘soup’ to its description, ‘hot’."},{"text":"She becomes nervous before exams.","highlight":"becomes","note":"‘becomes’ is a linking verb showing a change of state."},{"text":"They build houses near the coast.","highlight":"build","note":"The verb tells us what ‘they’ do."}],"quiz":[{"prompt":"Which word is the verb? ‘The kettle boiled quickly.’","options":["kettle","boiled","quickly","the"],"correctIndex":1,"explanation":"‘boiled’ is the action — the verb."}],"estimatedMinutes":4,"id":2},{"level":"foundation","title":"Articles: a, an, the","summary":"Small words that tell us whether a noun is general or specific.","explanation":["Use ‘a’ before a consonant sound and ‘an’ before a vowel sound: a car, an apple, an hour, a university.","Use ‘the’ when you mean a specific item both speaker and listener know about."],"keyPoints":["‘a/an’ introduce something new or general.","‘the’ points to something specific.","Choose a/an by sound, not spelling: an hour, a university."],"examples":[{"text":"I saw a fox in the garden.","highlight":"a fox","note":"‘a fox’ — we mention it for the first time."},{"text":"The fox came back the next night.","highlight":"The fox","note":"Now we use ‘the’ — we both know which fox."},{"text":"She waited for an hour.","highlight":"an hour","note":"‘hour’ starts with a vowel sound, so we use ‘an’."},{"text":"He is a university student.","highlight":"a university","note":"‘university’ sounds like ‘you-’, a consonant sound, so ‘a’."}],"quiz":[{"prompt":"Choose: ‘She is ___ honest person.’","options":["a","an","the","no article"],"correctIndex":1,"explanation":"‘honest’ begins with a silent h — a vowel sound — so we use ‘an’."}],"estimatedMinutes":4,"id":3},{"level":"foundation","title":"Adjectives: Describing Words","summary":"Adjectives describe nouns — they add colour and detail.","explanation":["An adjective tells us more about a noun: a red apple, a tall building, a happy child.","Adjectives usually go before the noun, or after a linking verb: ‘The sky is blue.’"],"keyPoints":["Adjectives describe nouns.","They can come before the noun or after ‘is/are/was’.","Comparatives add -er; superlatives add -est: fast, faster, fastest."],"examples":[{"text":"A bright, warm sun rose over the hills.","highlight":"bright, warm","note":"Two adjectives describing ‘sun’, separated by a comma."},{"text":"This puzzle is difficult.","highlight":"difficult","note":"The adjective follows the linking verb ‘is’."},{"text":"Today is colder than yesterday.","highlight":"colder","note":"‘colder’ compares two things — a comparative."},{"text":"It was the loudest concert of the year.","highlight":"loudest","note":"‘loudest’ is the superlative — the most of all."}],"quiz":[{"prompt":"Which is the superlative form?","options":["big","bigger","biggest","bigly"],"correctIndex":2,"explanation":"‘biggest’ means the most big of all — the superlative."}],"estimatedMinutes":4,"id":4},{"level":"foundation","title":"Sentences: Capital Letters & Full Stops","summary":"Every sentence starts with a capital and ends with a stop.","explanation":["A sentence is a complete thought. It begins with a capital letter and ends with a full stop, question mark, or exclamation mark.","A sentence needs a subject (who or what) and a verb (the action or being)."],"keyPoints":["Start every sentence with a capital letter.","End with . ? or !","A sentence needs a subject and a verb."],"examples":[{"text":"The bus arrived on time.","highlight":"The","note":"Capital ‘T’ to start, full stop to finish."},{"text":"Where did you put my phone?","highlight":"?","note":"A question ends with a question mark."},{"text":"What a beautiful morning!","highlight":"!","note":"An exclamation shows strong feeling."},{"text":"Birds sing.","highlight":"Birds sing","note":"Even two words can be a full sentence: subject + verb."}],"quiz":[{"prompt":"Which is a complete sentence?","options":["Running fast","Because of the rain","The dog barks","Under the table"],"correctIndex":2,"explanation":"‘The dog barks’ has a subject (dog) and a verb (barks)."}],"estimatedMinutes":4,"id":5},{"level":"intermediate","title":"Present Tenses","summary":"Talking about now, habits, and ongoing actions.","explanation":["The present simple describes habits and facts: ‘I walk to work.’","The present continuous describes something happening right now: ‘I am walking to work.’ It uses ‘am/is/are’ + verb-ing."],"keyPoints":["Present simple: habits and facts.","Present continuous: happening now (am/is/are + -ing).","Add -s for he/she/it in the present simple: she walks."],"examples":[{"text":"Water boils at 100 degrees Celsius.","highlight":"boils","note":"A fact — present simple."},{"text":"She is reading in the garden right now.","highlight":"is reading","note":"Happening now — present continuous."},{"text":"They play football every Saturday.","highlight":"play","note":"A habit — present simple."},{"text":"He works in a hospital.","highlight":"works","note":"Note the -s for ‘he’ in the present simple."}],"quiz":[{"prompt":"Choose: ‘Listen! The baby ___.’","options":["cries","cry","is crying","cried"],"correctIndex":2,"explanation":"‘Listen!’ signals something happening now — present continuous: ‘is crying’."}],"estimatedMinutes":5,"id":6},{"level":"intermediate","title":"Past Tenses","summary":"Describing finished actions and the past in progress.","explanation":["The past simple describes a finished action: ‘I watched a film.’ Regular verbs add -ed; many common verbs are irregular (go → went).","The past continuous sets a scene or a longer action interrupted by another: ‘I was cooking when the phone rang.’"],"keyPoints":["Past simple: finished actions (-ed, or irregular forms).","Past continuous: was/were + -ing for background action.","Learn irregular verbs by heart: see → saw, buy → bought."],"examples":[{"text":"We visited the museum last week.","highlight":"visited","note":"Regular past simple — add -ed."},{"text":"She wrote three letters yesterday.","highlight":"wrote","note":"‘write’ is irregular: write → wrote."},{"text":"I was sleeping when the alarm went off.","highlight":"was sleeping","note":"Past continuous interrupted by a past simple action."},{"text":"They were laughing all evening.","highlight":"were laughing","note":"A longer ongoing action in the past."}],"quiz":[{"prompt":"Past simple of ‘buy’?","options":["buyed","bought","buied","buy"],"correctIndex":1,"explanation":"‘buy’ is irregular: buy → bought."}],"estimatedMinutes":5,"id":7},{"level":"intermediate","title":"Prepositions of Time & Place","summary":"Little words that locate things in time and space.","explanation":["Prepositions of place show where: in, on, under, between, behind.","Prepositions of time follow patterns: ‘in’ for months and years, ‘on’ for days and dates, ‘at’ for clock times."],"keyPoints":["at a time, on a day, in a month/year.","in a box, on a table, under a chair.","Some are fixed by habit — learn them as phrases."],"examples":[{"text":"The meeting is at 3 o’clock.","highlight":"at 3 o’clock","note":"‘at’ for a clock time."},{"text":"We met on Monday.","highlight":"on Monday","note":"‘on’ for a day."},{"text":"Her birthday is in July.","highlight":"in July","note":"‘in’ for a month."},{"text":"The keys are under the newspaper.","highlight":"under","note":"‘under’ shows position in space."}],"quiz":[{"prompt":"Choose: ‘I’ll see you ___ Friday.’","options":["in","at","on","by"],"correctIndex":2,"explanation":"Use ‘on’ for days of the week."}],"estimatedMinutes":5,"id":8},{"level":"intermediate","title":"Conjunctions: Joining Ideas","summary":"Words that connect words, phrases, and clauses.","explanation":["Coordinating conjunctions join equal parts: and, but, or, so, yet (remember FANBOYS).","Subordinating conjunctions add a dependent idea: because, although, when, if, while."],"keyPoints":["Coordinating: and, but, or, so, for, nor, yet.","Subordinating: because, although, when, if.","Use a comma before and/but/so when joining two full sentences."],"examples":[{"text":"I wanted to go, but it was raining.","highlight":"but","note":"‘but’ joins two complete ideas; note the comma."},{"text":"We stayed inside because the storm was fierce.","highlight":"because","note":"‘because’ adds a reason — a subordinate clause."},{"text":"You can have tea or coffee.","highlight":"or","note":"‘or’ offers a choice."},{"text":"Although she was tired, she finished the race.","highlight":"Although","note":"A subordinate clause first, so a comma follows it."}],"quiz":[{"prompt":"Which is a subordinating conjunction?","options":["and","but","although","or"],"correctIndex":2,"explanation":"‘although’ introduces a dependent clause — it is subordinating."}],"estimatedMinutes":5,"id":9},{"level":"intermediate","title":"Commas That Matter","summary":"Where commas help — and where they hurt.","explanation":["Use commas to separate items in a list, to set off extra information, and after an introductory phrase.","Avoid the comma splice: don’t join two full sentences with only a comma. Use a full stop, a semicolon, or a conjunction."],"keyPoints":["Separate list items with commas.","Set off extra (non-essential) information with commas.","Don’t splice two sentences with just a comma."],"examples":[{"text":"We bought bread, cheese, and olives.","highlight":"bread, cheese, and olives","note":"Commas separate items in a list."},{"text":"My brother, who lives in Leeds, is visiting.","highlight":", who lives in Leeds,","note":"Commas wrap extra, non-essential detail."},{"text":"After the meeting, we went for lunch.","highlight":"After the meeting,","note":"A comma after an introductory phrase."},{"text":"It was late, so we went home.","highlight":", so","note":"Comma + ‘so’ correctly joins two sentences."}],"quiz":[{"prompt":"Which sentence has a comma splice (an error)?","options":["It rained, so we stayed in.","It rained, we stayed in.","It rained. We stayed in.","Because it rained, we stayed in."],"correctIndex":1,"explanation":"‘It rained, we stayed in.’ joins two sentences with only a comma — a splice."}],"estimatedMinutes":6,"id":10},{"level":"intermediate","title":"Plurals & Possessives","summary":"Making things plural, and showing ownership with apostrophes.","explanation":["Most plurals add -s (cat → cats). Words ending in -s, -x, -ch, -sh add -es (box → boxes). Some are irregular (child → children).","Use an apostrophe for possession: the dog’s bowl (one dog), the dogs’ bowls (many dogs). ‘Its’ shows possession; ‘it’s’ means ‘it is’."],"keyPoints":["Add -s or -es for most plurals.","’s shows singular possession; s’ shows plural possession.","‘its’ = belonging to it; ‘it’s’ = it is."],"examples":[{"text":"The boxes were stacked by the door.","highlight":"boxes","note":"‘box’ ends in -x, so the plural adds -es."},{"text":"That is my sister’s coat.","highlight":"sister’s","note":"One sister owns the coat — apostrophe before the s."},{"text":"The players’ changing room was locked.","highlight":"players’","note":"Many players — apostrophe after the s."},{"text":"It’s raining, and the cat licked its paw.","highlight":"It’s … its","note":"‘It’s’ = it is; ‘its’ = belonging to it."}],"quiz":[{"prompt":"Choose: ‘The dog wagged ___ tail.’","options":["it’s","its","its’","it is"],"correctIndex":1,"explanation":"‘its’ shows possession; no apostrophe is needed."}],"estimatedMinutes":6,"id":11},{"level":"advanced","title":"Perfect Tenses","summary":"Linking the past to now and ordering past events.","explanation":["The present perfect (have/has + past participle) links a past action to the present: ‘I have finished the report.’ It’s used for experience and recent results.","The past perfect (had + past participle) shows which of two past events happened first: ‘The train had left before we arrived.’"],"keyPoints":["Present perfect: have/has + past participle.","Past perfect: had + past participle for the earlier past event.","Use ‘since’ and ‘for’ with the present perfect: since 2010, for years."],"examples":[{"text":"I have lived here since 2015.","highlight":"have lived","note":"A state that began in the past and continues now."},{"text":"She has just sent the email.","highlight":"has just sent","note":"A recent action with a present result."},{"text":"By the time we arrived, the film had started.","highlight":"had started","note":"The film started first — past perfect."},{"text":"They had never seen snow before that trip.","highlight":"had never seen","note":"Past perfect for experience up to a past moment.","slowByDefault":true}],"quiz":[{"prompt":"Choose: ‘When I got home, my guests ___ already ___.’","options":["have / arrived","had / arrived","has / arrive","were / arrive"],"correctIndex":1,"explanation":"Two past events: the earlier one (arriving) uses the past perfect ‘had arrived’."}],"estimatedMinutes":7,"id":12},{"level":"advanced","title":"Conditionals","summary":"Talking about possibilities, hypotheticals, and regrets.","explanation":["Zero/first conditionals describe real or likely situations: ‘If you heat ice, it melts.’ / ‘If it rains, I’ll stay in.’","The second conditional imagines the unlikely or unreal present: ‘If I won the lottery, I would travel.’ The third looks back at an unreal past: ‘If I had studied, I would have passed.’"],"keyPoints":["First conditional: if + present, will + verb (likely future).","Second conditional: if + past, would + verb (unreal present).","Third conditional: if + past perfect, would have + participle (unreal past)."],"examples":[{"text":"If it rains tomorrow, we’ll cancel the picnic.","highlight":"If … we’ll","note":"First conditional — a likely future."},{"text":"If I were you, I would apologise.","highlight":"If I were you","note":"Second conditional — note ‘were’ for all subjects."},{"text":"If she had left earlier, she would have caught the train.","highlight":"had left … would have caught","note":"Third conditional — an unreal past.","slowByDefault":true},{"text":"Water freezes if the temperature drops below zero.","highlight":"freezes if","note":"Zero conditional — a general truth."}],"quiz":[{"prompt":"Complete: ‘If I had known, I ___ told you.’","options":["will have","would have","would","had"],"correctIndex":1,"explanation":"Third conditional pairs ‘had known’ with ‘would have told’."}],"estimatedMinutes":7,"id":13},{"level":"advanced","title":"The Passive Voice","summary":"Shifting focus from the doer to the action or result.","explanation":["In the active voice, the subject does the action: ‘The chef cooked the meal.’ In the passive, the focus moves to what received the action: ‘The meal was cooked by the chef.’","Form the passive with ‘be’ + past participle. Use it when the doer is unknown, unimportant, or obvious — but prefer the active voice for clear, direct writing."],"keyPoints":["Passive = form of ‘be’ + past participle.","Use it to focus on the result, not the doer.","Don’t overuse it — the active voice is usually clearer."],"examples":[{"text":"The bridge was built in 1890.","highlight":"was built","note":"The builder is unknown or unimportant — passive fits."},{"text":"Mistakes were made.","highlight":"were made","note":"The passive hides the doer — sometimes deliberately."},{"text":"Your order has been shipped.","highlight":"has been shipped","note":"Present perfect passive — focus on the result."},{"text":"The results will be announced on Friday.","highlight":"will be announced","note":"Future passive — the announcer is not the point."}],"quiz":[{"prompt":"Which sentence is passive?","options":["The committee approved the plan.","The plan was approved by the committee.","The committee will meet soon.","Everyone approves of the plan."],"correctIndex":1,"explanation":"‘was approved’ is ‘be’ + past participle — the passive voice."}],"estimatedMinutes":7,"id":14},{"level":"advanced","title":"Relative Clauses","summary":"Adding information with who, which, that, and whose.","explanation":["A defining relative clause gives essential information and takes no commas: ‘The book that you lent me was brilliant.’","A non-defining clause adds extra, removable information and is wrapped in commas: ‘My boss, who is from Cardiff, retires soon.’"],"keyPoints":["Defining clause: essential, no commas.","Non-defining clause: extra detail, commas required.","Use ‘who’ for people, ‘which’ for things, ‘whose’ for possession."],"examples":[{"text":"The woman who called you is my aunt.","highlight":"who called you","note":"Defining — it tells us which woman; no commas."},{"text":"Paris, which I visited last year, is stunning.","highlight":", which I visited last year,","note":"Non-defining — extra detail in commas."},{"text":"That’s the author whose book won the prize.","highlight":"whose book","note":"‘whose’ shows possession."},{"text":"Here is the report that I promised you.","highlight":"that I promised you","note":"Defining clause identifying which report."}],"quiz":[{"prompt":"Which needs commas?","options":["The student who studies hardest will pass.","My car which is ten years old still runs well.","The pen that I bought leaks.","People who smoke risk their health."],"correctIndex":1,"explanation":"‘which is ten years old’ is extra, non-essential detail, so it needs commas."}],"estimatedMinutes":7,"id":15},{"level":"advanced","title":"Reported Speech","summary":"Telling someone what another person said.","explanation":["When we report speech, tenses usually shift back one step: ‘I am tired’ becomes ‘She said she was tired.’","Pronouns and time words often change too: ‘I’ll call you tomorrow’ → ‘He said he would call me the next day.’"],"keyPoints":["Tenses shift back: present → past, will → would.","Adjust pronouns to match the new speaker.","Change time words: today → that day, tomorrow → the next day."],"examples":[{"text":"Direct: ‘I live in Bristol.’ Reported: She said she lived in Bristol.","highlight":"lived","note":"Present ‘live’ shifts to past ‘lived’.","spokenText":"Direct: I live in Bristol. Reported: She said she lived in Bristol."},{"text":"Direct: ‘We will help.’ Reported: They said they would help.","highlight":"would help","note":"‘will’ becomes ‘would’.","spokenText":"Direct: We will help. Reported: They said they would help."},{"text":"He asked where the station was.","highlight":"where the station was","note":"Reported questions use statement word order.","slowByDefault":true},{"text":"She told me she had finished.","highlight":"had finished","note":"Past simple ‘finished’ shifts to past perfect."}],"quiz":[{"prompt":"Report this: ‘I’m busy now.’ → He said he ___ busy ___.","options":["is / now","was / then","was / now","had been / then"],"correctIndex":1,"explanation":"‘am’ shifts to ‘was’ and ‘now’ shifts to ‘then’."}],"estimatedMinutes":7,"id":16},{"level":"advanced","title":"Parallelism & Modifiers","summary":"Balancing structure and placing modifiers where they belong.","explanation":["Parallelism means matching the form of items in a list or comparison: ‘She likes reading, hiking, and swimming’ — not ‘…and to swim.’","A misplaced or dangling modifier describes the wrong thing: ‘Walking home, the rain started’ wrongly suggests the rain was walking. Fix it: ‘As I walked home, the rain started.’"],"keyPoints":["Keep list items in the same grammatical form.","Place modifiers next to the word they describe.","Fix danglers by naming the real subject."],"examples":[{"text":"The role requires writing, editing, and proofreading.","highlight":"writing, editing, and proofreading","note":"Three -ing forms in parallel — balanced."},{"text":"We came to learn, to grow, and to lead.","highlight":"to learn, to grow, and to lead","note":"Parallel infinitives."},{"text":"Covered in chocolate, I devoured the cake.","highlight":"Covered in chocolate, I","note":"A dangling modifier — it sounds like *I* was covered in chocolate!","slowByDefault":true},{"text":"I devoured the cake, which was covered in chocolate.","highlight":"which was covered in chocolate","note":"Fixed — the modifier now sits beside ‘cake’."}],"quiz":[{"prompt":"Which list is parallel?","options":["He enjoys to cook, baking, and reading.","He enjoys cooking, baking, and reading.","He enjoys cooking, to bake, and reads.","He enjoys cooks, baking, and to read."],"correctIndex":1,"explanation":"All three items are -ing forms, so the structure is parallel."}],"estimatedMinutes":8,"id":17}];
+const LEVELS = [
+  {id:"foundation", name:"Foundation", blurb:"Words, simple sentences, and how they fit together."},
+  {id:"intermediate", name:"Intermediate", blurb:"Tenses, punctuation, and joining ideas with confidence."},
+  {id:"advanced", name:"Advanced", blurb:"Nuance, style, and the rules that polish strong writing."}
+];
+
+/* ===== Basics track — very simple, nursery-style ===================== */
+const BASICS = [
+  {id:1001, level:"basics", title:"Letters Make Words", estimatedMinutes:2,
+   summary:"Letters join together to make words.",
+   explanation:["Words are made of letters.","When we put letters in a row, they make a word we can say."],
+   keyPoints:["Letters are a, b, c and all the rest.","Put letters together to make a word.","We read words from left to right."],
+   examples:[
+     {text:"c – a – t makes cat", spokenText:"c, a, t, makes cat.", emoji:"🐱", note:"Three letters make the word cat."},
+     {text:"d – o – g makes dog", spokenText:"d, o, g, makes dog.", emoji:"🐶", note:"The word dog has three letters."},
+     {text:"s – u – n makes sun", spokenText:"s, u, n, makes sun.", emoji:"☀️", note:"Say each letter, then the whole word."}],
+   quiz:[{prompt:"How many letters are in the word ‘cat’?", options:["1","2","3","4"], correctIndex:2, explanation:"Cat has three letters: c, a, t."}]},
+
+  {id:1002, level:"basics", title:"Naming Words", estimatedMinutes:2,
+   summary:"A naming word is the name of a thing.",
+   explanation:["Everything has a name.","A naming word tells us the name of a person, an animal, or a thing."],
+   keyPoints:["A naming word names something.","Cat, ball and mum are naming words.","You can point to most naming words."],
+   examples:[
+     {text:"ball", emoji:"⚽", note:"Ball is the name of a thing."},
+     {text:"cat", emoji:"🐱", note:"Cat is the name of an animal."},
+     {text:"mum", emoji:"👩", note:"Mum is the name of a person."},
+     {text:"cup", emoji:"🥤", note:"Cup is a naming word too."}],
+   quiz:[{prompt:"Which one is a naming word?", options:["run","dog","jump","big"], correctIndex:1, explanation:"Dog names an animal, so it is a naming word."}]},
+
+  {id:1003, level:"basics", title:"People, Animals and Things", estimatedMinutes:2,
+   summary:"Naming words can be people, animals or things.",
+   explanation:["Some naming words are people, like mum or dad.","Some are animals, like dog or fish.","Some are things, like cup or car."],
+   keyPoints:["People: mum, dad, baby.","Animals: dog, cat, fish.","Things: cup, car, ball."],
+   examples:[
+     {text:"dad", emoji:"👨", note:"Dad is a person."},
+     {text:"fish", emoji:"🐟", note:"Fish is an animal."},
+     {text:"car", emoji:"🚗", note:"Car is a thing."}],
+   quiz:[{prompt:"Which one is an animal?", options:["cup","fish","car","hat"], correctIndex:1, explanation:"Fish is an animal."}]},
+
+  {id:1004, level:"basics", title:"Doing Words", estimatedMinutes:2,
+   summary:"A doing word tells us what someone does.",
+   explanation:["A doing word is an action — something you do.","Run, jump and eat are doing words."],
+   keyPoints:["Doing words show action.","Run, jump, eat, sleep.","The dog can run."],
+   examples:[
+     {text:"run", emoji:"🏃", note:"Run is a doing word."},
+     {text:"eat", emoji:"🍎", note:"Eat is something you do."},
+     {text:"jump", emoji:"⭐", note:"Jump up high!"},
+     {text:"sleep", emoji:"😴", note:"Sleep is a doing word too."}],
+   quiz:[{prompt:"Which one is a doing word?", options:["cat","run","red","cup"], correctIndex:1, explanation:"Run is an action, so it is a doing word."}]},
+
+  {id:1005, level:"basics", title:"Describing Words", estimatedMinutes:2,
+   summary:"A describing word tells us more about a thing.",
+   explanation:["A describing word tells us what something is like.","Big, small, red and happy are describing words."],
+   keyPoints:["Describing words tell us more.","big, small, red, happy.","Try: a big dog."],
+   examples:[
+     {text:"a big dog", emoji:"🐶", note:"Big tells us about the dog."},
+     {text:"a red ball", emoji:"🔴", note:"Red tells us the colour of the ball."},
+     {text:"a happy baby", emoji:"👶", note:"Happy tells us how the baby feels."}],
+   quiz:[{prompt:"Which word describes the ball: ‘a ___ ball’?", options:["run","red","eat","cup"], correctIndex:1, explanation:"Red is a describing word. It tells us about the ball."}]},
+
+  {id:1006, level:"basics", title:"Small Words: a and the", estimatedMinutes:2,
+   summary:"‘a’ and ‘the’ are little words we use before naming words.",
+   explanation:["We often put ‘a’ or ‘the’ before a naming word.","We say ‘a cat’ or ‘the sun’."],
+   keyPoints:["Use ‘a’ for any one thing: a cat.","Use ‘the’ for a special one: the sun.","These little words come first."],
+   examples:[
+     {text:"a cat", emoji:"🐱", note:"‘a’ comes before cat."},
+     {text:"the sun", emoji:"☀️", note:"There is one sun, so we say ‘the sun’."},
+     {text:"a ball", emoji:"⚽", note:"‘a’ before ball."}],
+   quiz:[{prompt:"Fill the gap: ‘___ sun is hot.’", options:["a","the","run","big"], correctIndex:1, explanation:"There is only one sun, so we say ‘the sun’."}]},
+
+  {id:1007, level:"basics", title:"One and Many", estimatedMinutes:2,
+   summary:"Add an ‘s’ to show more than one.",
+   explanation:["One thing is just the word: cat.","For more than one, we often add ‘s’: cats."],
+   keyPoints:["One: cat.","Many: cats.","Add ‘s’ for more than one."],
+   examples:[
+     {text:"one cat", emoji:"🐱", note:"Just one."},
+     {text:"two cats", emoji:"🐱🐱", note:"More than one, so we add s: cats."},
+     {text:"three dogs", emoji:"🐶🐶🐶", note:"dog becomes dogs."}],
+   quiz:[{prompt:"How do we write more than one dog?", options:["dog","dogs","dogg","the dog"], correctIndex:1, explanation:"We add s to make dogs."}]},
+
+  {id:1008, level:"basics", title:"Big Letters at the Start", estimatedMinutes:2,
+   summary:"A sentence starts with a big (capital) letter.",
+   explanation:["The first letter of a sentence is a big letter.","Names of people also start with a big letter."],
+   keyPoints:["Start a sentence with a BIG letter.","Names start with a big letter: Tom, Sam.","Big letters are also called capital letters."],
+   examples:[
+     {text:"The dog is happy.", emoji:"🐶", note:"‘The’ starts with a big T."},
+     {text:"My name is Sam.", emoji:"🙂", note:"Sam starts with a big S."},
+     {text:"We can play.", emoji:"🎈", note:"‘We’ starts with a big W."}],
+   quiz:[{prompt:"A sentence should start with a…", options:["small letter","big letter","number","space"], correctIndex:1, explanation:"Sentences start with a big (capital) letter."}]},
+
+  {id:1009, level:"basics", title:"A Dot at the End", estimatedMinutes:2,
+   summary:"A sentence ends with a full stop — a little dot.",
+   explanation:["When a sentence finishes, we put a full stop.","A full stop is a little dot at the end."],
+   keyPoints:["A full stop is a dot.","It goes at the end of a sentence.","It tells the reader to stop."],
+   examples:[
+     {text:"The sun is hot.", emoji:"☀️", note:"The dot shows the sentence has ended."},
+     {text:"I like cake.", emoji:"🍰", note:"Full stop at the end."},
+     {text:"We can run.", emoji:"🏃", note:"Stop here with a dot."}],
+   quiz:[{prompt:"What do we put at the end of a sentence?", options:["a big letter","a full stop","a number","nothing"], correctIndex:1, explanation:"We end a sentence with a full stop (a dot)."}]},
+
+  {id:1010, level:"basics", title:"Make a Tiny Sentence", estimatedMinutes:3,
+   summary:"Put a naming word and a doing word together to make a sentence.",
+   explanation:["A tiny sentence has someone and an action.","In ‘The dog runs’, dog is the naming word and runs is the doing word."],
+   keyPoints:["Naming word + doing word = a sentence.","Start with a big letter.","End with a full stop."],
+   examples:[
+     {text:"The dog runs.", emoji:"🐶", note:"dog (naming) + runs (doing)."},
+     {text:"The cat sleeps.", emoji:"🐱", note:"cat + sleeps."},
+     {text:"The baby smiles.", emoji:"👶", note:"baby + smiles."}],
+   quiz:[{prompt:"Which one is a sentence?", options:["dog","The dog runs.","big red","run run"], correctIndex:1, explanation:"‘The dog runs.’ has a naming word and a doing word, a big letter and a full stop."}]}
+];
+
+const ALL = BASICS.concat(LESSONS);
+
+/* ===== Safe storage (degrades silently inside sandboxes) ============= */
+const mem = {};
+const store = {
+  get(k,d){ try{ const v=localStorage.getItem(k); return v==null?(k in mem?mem[k]:d):JSON.parse(v);}catch(e){ return k in mem?mem[k]:d; } },
+  set(k,v){ mem[k]=v; try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+};
+
+/* ===== Cloud (Supabase) — OPTIONAL =================================== *
+ * Paste your project URL + anon key below to turn on real accounts and
+ * cross-device sync. Leave them blank to use device-only local profiles.  */
+const CONFIG = {
+  SUPABASE_URL: "",          // e.g. "https://abcd1234.supabase.co"
+  SUPABASE_ANON_KEY: "",     // your project's anon / public key
+  ADMIN_EMAILS: []           // optional: ["you@example.com"] — can open admin.html
+};
+let sb = null;
+const CLOUD = !!(CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY && window.supabase);
+if(CLOUD){ try{ sb = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY); }catch(e){ console.error("Supabase init failed", e); } }
+
+const cloud = {
+  user:null,
+  signUp(email,pw){ return sb.auth.signUp({email,password:pw}); },
+  signIn(email,pw){ return sb.auth.signInWithPassword({email,password:pw}); },
+  async signOut(){ try{ await sb.auth.signOut(); }catch(e){} },
+  async fetchRow(uid){ const {data,error}=await sb.from("learner_state").select("*").eq("user_id",uid).maybeSingle(); if(error) throw error; return data; },
+  async saveRow(p){ p.updated_at=new Date().toISOString(); const {error}=await sb.from("learner_state").upsert(p,{onConflict:"user_id"}); if(error) throw error; }
+};
+let cloudTimer=null;
+function cloudSaveSoon(){ if(!CLOUD||!cloud.user) return; clearTimeout(cloudTimer); cloudTimer=setTimeout(cloudSaveNow,1200); }
+function cloudSaveNow(){
+  if(!CLOUD||!cloud.user) return;
+  const me=state.profiles[0]||{};
+  cloud.saveRow({ user_id:cloud.user.id, email:cloud.user.email||null, display_name:me.name||null, avatar:me.avatar||"🌟",
+    completed:[...state.completed], quiz_scores:state.quizScores, settings:state.settings, mode:state.mode, stats:state.stats })
+    .catch(e=>console.error("cloud save failed", e));
+}
+
+/* ===== Settings presets ============================================== */
+const PRESETS = {
+  dyslexia:{ ic:"📖", name:"Dyslexia-friendly", desc:"OpenDyslexic, roomy spacing, cream tint, word highlight",
+    s:{font:"dyslexic", size:20, line:2.0, letter:0.75, word:6, bionic:true, highlight:true, tint:"cream", spotlight:true, contrast:false, focus:false} },
+  adhd:{ ic:"🎯", name:"Calm focus (ADHD)", desc:"One step at a time, spotlight, calm, gentle quizzes",
+    s:{font:"lexend", size:19, line:1.9, letter:0.25, word:3, focus:true, spotlight:true, calm:true, lowp:true, highlight:true, tint:"mint", bionic:false, contrast:false} },
+  larger:{ ic:"🔎", name:"Larger & clearer", desc:"Big, high-contrast, highly legible text",
+    s:{font:"atkinson", size:26, line:1.9, letter:0.5, word:2, contrast:true, tint:"none", bionic:false, focus:false, spotlight:false} },
+  reset:{ ic:"↺", name:"Reset to default", desc:"Standard comfortable settings",
+    s:{font:"lexend", size:18, line:1.7, letter:0, word:0, bionic:false, highlight:true, contrast:false, tint:"none", calm:false, lowp:false, focus:false, spotlight:false} }
+};
+
+/* ===== State ========================================================= */
+const DEFAULTS = {size:18,line:1.7,letter:0,word:0,font:"lexend",bionic:false,highlight:true,contrast:false,tint:"none",rate:0.95,pitch:1,voice:null,calm:false,lowp:false,focus:false,spotlight:false};
+const AVATARS = ["🦊","🐼","🐯","🐶","🐱","🦁","🐸","🐵","🦄","🐢","🐧","🐝","🐙","🦉","🐬","🌟"];
+const state = {
+  tab:"learn", level:"foundation", view:{name:"list"}, screen:"profiles",
+  mode:"basics", onboarded:false,
+  completed:new Set(), quizScores:{}, settings:Object.assign({},DEFAULTS),
+  stats:{}, ui:{addForm:false, tutor:false},
+  profiles: store.get("gg_profiles", []),
+  currentProfileId: store.get("gg_current", null)
+};
+
+/* Per-profile storage keys */
+function pkey(base){ return "gg_"+base+"_"+state.currentProfileId; }
+
+function todayStr(){ return new Date().toDateString(); }
+
+function loadProfile(id){
+  state.currentProfileId=id; store.set("gg_current",id);
+  state.completed=new Set(store.get(pkey("done"),[]));
+  state.quizScores=store.get(pkey("scores"),{});
+  state.settings=Object.assign({},DEFAULTS,store.get(pkey("settings"),{}));
+  state.mode=store.get(pkey("mode"),"basics");
+  state.onboarded=store.get(pkey("onboarded"),false);
+  awardSeen=new Set(store.get(pkey("awards"),[]));
+  const stats=store.get(pkey("stats"),{created:Date.now(),sessions:0,quizzesTaken:0,streak:0,longestStreak:0,lastActiveDay:null});
+  const t=todayStr();
+  if(stats.lastActiveDay!==t){
+    const yest=new Date(Date.now()-86400000).toDateString();
+    stats.streak=(stats.lastActiveDay===yest)?(stats.streak||0)+1:1;
+    stats.longestStreak=Math.max(stats.longestStreak||0,stats.streak);
+    stats.lastActiveDay=t;
+  }
+  stats.sessions=(stats.sessions||0)+1; stats.lastActive=Date.now();
+  state.stats=stats; store.set(pkey("stats"),stats);
+}
+
+function createProfile(name, avatar){
+  const id="p"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  state.profiles.push({id, name:(name||"Learner").slice(0,24), avatar:avatar||"🌟", created:Date.now()});
+  store.set("gg_profiles", state.profiles);
+  loadProfile(id);
+}
+
+function deleteProfile(id){
+  state.profiles=state.profiles.filter(p=>p.id!==id);
+  store.set("gg_profiles",state.profiles);
+  ["done","scores","settings","mode","onboarded","awards","stats"].forEach(b=>{ try{ localStorage.removeItem("gg_"+b+"_"+id); }catch(e){} delete mem["gg_"+b+"_"+id]; });
+  if(state.currentProfileId===id){ state.currentProfileId=null; try{ localStorage.removeItem("gg_current"); }catch(e){} delete mem["gg_current"]; }
+}
+
+function persist(){
+  if(!state.currentProfileId) return;
+  store.set(pkey("done"),[...state.completed]);
+  store.set(pkey("scores"),state.quizScores);
+  store.set(pkey("settings"),state.settings);
+  store.set(pkey("onboarded"),state.onboarded);
+  store.set(pkey("mode"),state.mode);
+  store.set(pkey("stats"),state.stats);
+  cloudSaveSoon();
+}
+
+/* ===== Speech ======================================================== */
+const synth = (typeof window!=="undefined") ? window.speechSynthesis : null;
+let voices = [];
+let speakingKey = null;
+
+/* Score a voice: higher = more natural / more British. */
+function voiceScore(v){
+  let s=0; const n=(v.name||"").toLowerCase(), lang=(v.lang||"").toLowerCase();
+  if(lang==="en-gb") s+=40; else if(lang.startsWith("en")) s+=10;
+  // quality keywords exposed by modern OS/browser voices
+  if(/(natural|neural|enhanced|premium|online)/.test(n)) s+=30;
+  if(/(siri|google)/.test(n)) s+=12;
+  // known good British voices across platforms
+  if(/(libby|sonia|ryan|maisie|thomas|hazel|george|arthur)/.test(n)) s+=14; // Microsoft
+  if(/(daniel|serena|kate|stephanie|oliver|martha|jamie)/.test(n)) s+=14;    // Apple
+  if(/google uk english/.test(n)) s+=16;
+  if(v.localService===false) s+=6; // cloud voices tend to sound better
+  if(/compact|eloquence|fred|albert|zarvox/.test(n)) s-=20; // old robotic ones
+  return s;
+}
+function rankedVoices(){
+  return (synth ? synth.getVoices() : [])
+    .filter(v=>/^en/i.test(v.lang))
+    .map(v=>({v, score:voiceScore(v)}))
+    .sort((a,b)=>b.score-a.score)
+    .map(x=>x.v);
+}
+function bestVoiceURI(){ const r=rankedVoices(); return r.length? r[0].voiceURI : null; }
+function isNatural(v){ return voiceScore(v)>=40; }
+
+function loadVoices(){
+  voices = rankedVoices();
+  const sel = document.getElementById("voiceSel"); if(!sel) return;
+  sel.innerHTML = "";
+  const def = document.createElement("option"); def.value=""; def.textContent="Best available (recommended)"; sel.appendChild(def);
+  voices.forEach(v=>{
+    const o=document.createElement("option"); o.value=v.voiceURI;
+    const tag = isNatural(v) ? "✨ " : "";
+    const brit = /en-gb/i.test(v.lang) ? " · British" : "";
+    o.textContent = tag + v.name.replace(/\(.*?\)/,"").trim() + brit;
+    sel.appendChild(o);
+  });
+  sel.value = state.settings.voice || "";
+}
+if(synth){ loadVoices(); synth.onvoiceschanged = loadVoices; }
+/* Use the user's pick, or auto-pick the best natural British voice. */
+function chosenVoice(){
+  if(state.settings.voice){ const v=voices.find(x=>x.voiceURI===state.settings.voice); if(v) return v; }
+  const uri=bestVoiceURI(); return uri ? voices.find(x=>x.voiceURI===uri) : null;
+}
+
+
+function setSpotlit(unit){
+  const main=document.getElementById("app");
+  document.querySelectorAll(".dimunit.spotlit").forEach(x=>x.classList.remove("spotlit"));
+  if(state.settings.spotlight && unit){ main.classList.add("spotlight-active"); unit.classList.add("spotlit"); }
+  else if(!unit){ main.classList.remove("spotlight-active"); }
+}
+function clearHighlight(){
+  document.querySelectorAll(".tok.spoken").forEach(t=>t.classList.remove("spoken"));
+  document.querySelectorAll(".example.playing").forEach(e=>e.classList.remove("playing"));
+  setSpotlit(null);
+}
+function stopSpeech(){ if(synth) synth.cancel(); clearHighlight(); speakingKey=null; refreshPlayButtons(); }
+
+function unitOf(el){ return (el && el.closest) ? el.closest(".dimunit") : null; }
+
+function speakOn(key, text, el, opts={}){
+  if(!synth){ toast("This browser can’t read aloud. Try Safari or Chrome."); return; }
+  if(speakingKey===key && synth.speaking){ stopSpeech(); return; }
+  stopSpeech();
+  speakingKey = key;
+  const u = new SpeechSynthesisUtterance(text);
+  const v = chosenVoice(); if(v) u.voice=v; u.lang=(v&&v.lang)||"en-GB";
+  u.rate=(state.settings.rate||0.95)*(opts.slow?0.8:1); u.pitch=state.settings.pitch||1;
+  const toks = el ? [...el.querySelectorAll(".tok")] : [];
+  if(el && el.classList.contains("example")) el.classList.add("playing");
+  setSpotlit(unitOf(el));
+  u.onboundary=(ev)=>{ if(!state.settings.highlight||ev.name==="sentence")return; const i=ev.charIndex; let hit=null;
+    for(const t of toks){const s=+t.dataset.s,e=+t.dataset.e; if(i>=s&&i<e){hit=t;break;}} if(hit){toks.forEach(t=>t.classList.remove("spoken"));hit.classList.add("spoken");} };
+  u.onend=()=>{ if(speakingKey===key){ clearHighlight(); speakingKey=null; refreshPlayButtons(); } };
+  refreshPlayButtons();
+  synth.speak(u);
+}
+
+function playLesson(){
+  if(speakingKey==="lesson"){ stopSpeech(); return; }
+  stopSpeech();
+  const blocks=[...document.querySelectorAll("[data-readable]")];
+  speakingKey="lesson"; refreshPlayButtons();
+  let idx=0;
+  const next=()=>{
+    if(speakingKey!=="lesson"||idx>=blocks.length){ clearHighlight(); if(speakingKey==="lesson"){speakingKey=null;refreshPlayButtons();} return; }
+    const el=blocks[idx++], toks=[...el.querySelectorAll(".tok")];
+    el.scrollIntoView({behavior:state.settings.calm?"auto":"smooth", block:"center"});
+    setSpotlit(unitOf(el));
+    if(el.classList.contains("example")) el.classList.add("playing");
+    const u=new SpeechSynthesisUtterance(el.dataset.speak||el.textContent);
+    const v=chosenVoice(); if(v)u.voice=v; u.lang=(v&&v.lang)||"en-GB"; u.rate=state.settings.rate||0.95; u.pitch=state.settings.pitch||1;
+    u.onboundary=(ev)=>{ if(!state.settings.highlight||ev.name==="sentence")return; const i=ev.charIndex; let hit=null;
+      for(const t of toks){const s=+t.dataset.s,e=+t.dataset.e; if(i>=s&&i<e){hit=t;break;}} if(hit){toks.forEach(t=>t.classList.remove("spoken"));hit.classList.add("spoken");} };
+    u.onend=()=>{ el.classList.remove("playing"); toks.forEach(t=>t.classList.remove("spoken")); next(); };
+    synth.speak(u);
+  };
+  next();
+}
+
+function refreshPlayButtons(){
+  document.querySelectorAll("[data-playkey]").forEach(b=>{
+    const on=b.dataset.playkey===speakingKey; b.classList.toggle("playing",on);
+    b.textContent=on?"■":"▶"; b.setAttribute("aria-label",on?"Stop reading":"Read aloud");
+  });
+  const lp=document.getElementById("lessonPlay"); if(lp){ const on=speakingKey==="lesson"; lp.classList.toggle("playing",on); lp.textContent=on?"■":"▶"; }
+}
+
+/* ===== Reading-text rendering (bionic + highlight tokens) ============ */
+function renderReading(text){
+  const bionic=state.settings.bionic;
+  const frag=document.createDocumentFragment();
+  const re=/(\s+)|([^\s]+)/g; let m;
+  while((m=re.exec(text))){
+    if(m[1]){ frag.appendChild(document.createTextNode(m[1])); continue; }
+    const word=m[2], start=m.index;
+    const span=document.createElement("span");
+    span.className="tok"; span.dataset.s=start; span.dataset.e=start+word.length;
+    if(bionic){
+      const n=Math.max(1, Math.round(word.replace(/[^A-Za-z]/g,"").length*0.45));
+      let placed=0, b=document.createElement("b"); b.className="bionic-b";
+      for(const ch of word){
+        if(placed<n && /[A-Za-z]/.test(ch)){ b.textContent+=ch; placed++; }
+        else { if(b && b.textContent){ span.appendChild(b); b=null; } span.appendChild(document.createTextNode(ch)); }
+      }
+      if(b && b.textContent) span.appendChild(b);
+    } else { span.textContent=word; }
+    frag.appendChild(span);
+  }
+  const wrap=document.createElement("span"); wrap.appendChild(frag); return wrap;
+}
+
+/* ===== Helpers ======================================================= */
+const el=(tag,cls,txt)=>{const e=document.createElement(tag); if(cls)e.className=cls; if(txt!=null)e.textContent=txt; return e;};
+const byId=id=>document.getElementById(id);
+function lessonsFor(level){ return ALL.filter(l=>l.level===level); }
+function toast(msg){ const t=byId("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),2600); }
+function readingBlock(text,{tag="div",readable=false,cls=""}={}){
+  const wrap=el(tag,("reading "+cls).trim()); wrap.appendChild(renderReading(text));
+  if(readable){ wrap.dataset.readable="1"; wrap.dataset.speak=text; } return wrap;
+}
+
+/* ===== Views ========================================================= */
+const app=byId("app");
+function render(){
+  stopSpeech();
+  if(typeof stopRecog==="function") stopRecog();
+  app.classList.remove("spotlight-active");
+  app.innerHTML="";
+  document.body.dataset.screen = state.screen;
+  updateProfileChip();
+  if(state.screen==="cloudauth"){ renderCloudAuth(); return; }
+  if(state.screen==="account"){ renderAccount(); return; }
+  if(state.screen==="profiles"){ renderProfiles(); return; }
+  if(state.tab==="awards"){ renderAwards(); return; }
+  if(state.tab==="speak"){ renderSpeak(); return; }
+  if(state.view.name==="lesson"){ renderLesson(state.view.lesson); return; }
+  if(state.view.name==="quiz"){ renderQuiz(state.view.lesson); return; }
+  renderList();
+}
+
+function updateProfileChip(){
+  const p=state.profiles.find(x=>x.id===state.currentProfileId);
+  const av=byId("profileAvatar"), nm=byId("profileName");
+  if(av) av.textContent = p? p.avatar : "🙂";
+  if(nm) nm.textContent = p? p.name : "Profile";
+}
+
+/* ===== Cloud auth screens =========================================== */
+async function cloudEnter(user){
+  cloud.user=user;
+  state.currentProfileId=user.id;
+  let row=null;
+  try{ row=await cloud.fetchRow(user.id); }catch(e){ toast("Couldn’t load saved progress — working offline."); }
+  if(row){
+    state.completed=new Set(row.completed||[]);
+    state.quizScores=row.quiz_scores||{};
+    state.settings=Object.assign({},DEFAULTS,row.settings||{});
+    state.mode=row.mode||"basics";
+    state.stats=row.stats||{created:Date.now(),quizzesTaken:0,streak:0,longestStreak:0,lastActiveDay:null};
+    state.onboarded=true;
+    state.profiles=[{id:user.id, name:row.display_name||(user.email||"You").split("@")[0], avatar:row.avatar||"🌟"}];
+  } else {
+    state.completed=new Set(); state.quizScores={}; state.settings=Object.assign({},DEFAULTS);
+    state.mode="basics"; state.onboarded=false;
+    state.stats={created:Date.now(),quizzesTaken:0,streak:0,longestStreak:0,lastActiveDay:null};
+    state.profiles=[{id:user.id, name:(user.email||"You").split("@")[0], avatar:"🌟"}];
+  }
+  awardSeen=new Set();
+  const t=todayStr(), st=state.stats;
+  if(st.lastActiveDay!==t){ const y=new Date(Date.now()-86400000).toDateString(); st.streak=(st.lastActiveDay===y)?(st.streak||0)+1:1; st.longestStreak=Math.max(st.longestStreak||0,st.streak); st.lastActiveDay=t; }
+  st.lastActive=Date.now();
+  cloudSaveNow();
+  state.screen="app"; state.tab="learn"; state.view={name:"list"};
+  applySettings(); render(); syncTabs(); window.scrollTo(0,0);
+}
+
+function renderCloudAuth(){
+  const wrap=el("div","authwrap");
+  wrap.appendChild(el("div","authmark","G"));
+  wrap.appendChild(el("h1","authtitle","Sign in to GrammarGuru"));
+  wrap.appendChild(el("p","authsub","Your progress saves to your account and follows you on any device."));
+  const box=el("div","card authform");
+  const email=document.createElement("input"); email.type="email"; email.placeholder="you@example.com"; email.className="nameinput"; email.autocomplete="email";
+  const pw=document.createElement("input"); pw.type="password"; pw.placeholder="Password (6+ characters)"; pw.className="nameinput"; pw.autocomplete="current-password";
+  const err=el("div","autherr"); err.style.display="none";
+  box.appendChild(el("label","minilabel","Email")); box.appendChild(email);
+  const sp=el("div"); sp.style.height="10px"; box.appendChild(sp);
+  box.appendChild(el("label","minilabel","Password")); box.appendChild(pw);
+  box.appendChild(err);
+  const act=el("div","actions");
+  const go=el("button","btn primary","Sign in");
+  const make=el("button","btn","Create account");
+  const busy=b=>{ go.disabled=make.disabled=b; go.textContent=b?"…":"Sign in"; };
+  const fail=m=>{ err.textContent=m; err.style.display="block"; };
+  const clearErr=()=>{ err.style.display="none"; };
+  go.onclick=async()=>{ clearErr(); if(!email.value||!pw.value) return fail("Please enter your email and password."); busy(true);
+    try{ const {data,error}=await cloud.signIn(email.value.trim(),pw.value); if(error) fail(error.message); else if(data&&data.user) return cloudEnter(data.user); }
+    catch(e){ fail("Something went wrong. Check your connection."); } busy(false); };
+  make.onclick=async()=>{ clearErr(); if(!email.value||pw.value.length<6) return fail("Use a valid email and a password of at least 6 characters."); busy(true);
+    try{ const {data,error}=await cloud.signUp(email.value.trim(),pw.value); if(error) fail(error.message);
+      else if(data&&data.session&&data.user) return cloudEnter(data.user);
+      else fail("Account created! Please check your email to confirm, then sign in."); }
+    catch(e){ fail("Something went wrong. Check your connection."); } busy(false); };
+  act.appendChild(go); act.appendChild(make); box.appendChild(act);
+  wrap.appendChild(box);
+  wrap.appendChild(el("p","authnote","🔒 Secured by Supabase. Your password is handled by Supabase Auth, never stored in this app."));
+  app.appendChild(wrap);
+}
+
+function renderAccount(){
+  const p=state.profiles[0]||{};
+  const wrap=el("div","authwrap");
+  wrap.appendChild(el("div","authmark", p.avatar||"🌟"));
+  wrap.appendChild(el("h1","authtitle", p.name||"Your account"));
+  wrap.appendChild(el("p","authsub", (cloud.user&&cloud.user.email)||""));
+  const box=el("div","card");
+  const done=ALL.filter(l=>state.completed.has(l.id));
+  const basics=BASICS.filter(l=>state.completed.has(l.id)).length, grammar=LESSONS.filter(l=>state.completed.has(l.id)).length;
+  box.appendChild(el("div","tstat","Basics "+basics+"/"+BASICS.length+"  ·  Grammar "+grammar+"/"+LESSONS.length+"  ·  "+done.length+" total"));
+  box.appendChild(el("div","tstat","🔥 "+(state.stats.streak||0)+"-day streak  ·  "+(state.stats.quizzesTaken||0)+" quizzes taken"));
+  box.appendChild(el("div","tstat","Synced to your account — open it on any device to continue."));
+  wrap.appendChild(box);
+  const act=el("div","actions");
+  const back=el("button","btn primary","Back to lessons"); back.onclick=()=>{ state.screen="app"; render(); syncTabs(); };
+  const out=el("button","btn","Sign out"); out.onclick=async()=>{ await cloud.signOut(); cloud.user=null; state.currentProfileId=null; state.screen="cloudauth"; render(); };
+  act.appendChild(back); act.appendChild(out); wrap.appendChild(act);
+  if(cloud.user && CONFIG.ADMIN_EMAILS.includes(cloud.user.email)) wrap.appendChild(el("p","authnote","You’re an admin — open admin.html and sign in there to see all learners."));
+  app.appendChild(wrap);
+}
+
+
+function profileStats(id){
+  const done=store.get("gg_done_"+id, []);
+  const doneSet=new Set(done);
+  const st=store.get("gg_stats_"+id, {});
+  const basics=BASICS.filter(l=>doneSet.has(l.id)).length;
+  const grammar=LESSONS.filter(l=>doneSet.has(l.id)).length;
+  return {basics, grammar, total:done.length, quizzes:st.quizzesTaken||0, streak:st.streak||0, lastActive:st.lastActive||null};
+}
+function fmtDate(ts){ if(!ts) return "—"; const d=new Date(ts); const today=new Date().toDateString(); if(d.toDateString()===today) return "Today"; const y=new Date(Date.now()-86400000).toDateString(); if(d.toDateString()===y) return "Yesterday"; return d.toLocaleDateString(); }
+
+function renderProfiles(){
+  const wrap=el("div","authwrap");
+  wrap.appendChild(el("div","authmark","G"));
+  wrap.appendChild(el("h1","authtitle","Who’s learning?"));
+  wrap.appendChild(el("p","authsub","Pick your name to keep your own progress. Everyone on this device gets their own space."));
+
+  if(state.ui.addForm || state.profiles.length===0){
+    wrap.appendChild(renderProfileForm());
+  } else {
+    const grid=el("div","profilegrid");
+    state.profiles.forEach(p=>{
+      const s=profileStats(p.id);
+      const c=el("button","profilecard");
+      c.appendChild(el("div","pav",p.avatar));
+      c.appendChild(el("div","pname",p.name));
+      c.appendChild(el("div","pmeta", s.total+" lesson"+(s.total===1?"":"s")+" done"));
+      c.onclick=()=>{ loadProfile(p.id); state.screen="app"; state.tab="learn"; state.view={name:"list"}; applySettings(); render(); syncTabs(); };
+      grid.appendChild(c);
+    });
+    const add=el("button","profilecard add");
+    add.appendChild(el("div","pav","＋")); add.appendChild(el("div","pname","Add learner"));
+    add.onclick=()=>{ state.ui.addForm=true; render(); };
+    grid.appendChild(add);
+    wrap.appendChild(grid);
+
+    const tutor=el("button","authlink", state.ui.tutor ? "Hide tutor view" : "👩‍🏫 Tutor view — see everyone’s progress");
+    tutor.onclick=()=>{ state.ui.tutor=!state.ui.tutor; render(); };
+    wrap.appendChild(tutor);
+    if(state.ui.tutor) wrap.appendChild(renderTutorView());
+  }
+
+  wrap.appendChild(el("p","authnote","🔒 Profiles and progress are saved only on this device. No account or internet needed."));
+  app.appendChild(wrap);
+}
+
+function renderProfileForm(){
+  const box=el("div","card authform");
+  box.appendChild(el("div","section-label","New learner"));
+  let chosen=AVATARS[Math.floor(Math.random()*AVATARS.length)];
+  const avRow=el("div","avatarrow");
+  function paint(){ avRow.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed", b.dataset.a===chosen)); }
+  AVATARS.forEach(a=>{ const b=el("button","avbtn",a); b.dataset.a=a; b.onclick=()=>{ chosen=a; paint(); }; avRow.appendChild(b); });
+  const nameWrap=el("div"); nameWrap.style.margin="6px 0 12px";
+  const input=document.createElement("input"); input.type="text"; input.placeholder="Type a name"; input.className="nameinput"; input.maxLength=24;
+  nameWrap.appendChild(input);
+  box.appendChild(el("label","minilabel","Pick a buddy")); box.appendChild(avRow);
+  box.appendChild(el("label","minilabel","Your name")); box.appendChild(nameWrap);
+  const act=el("div","actions");
+  const create=el("button","btn primary","Start learning");
+  create.onclick=()=>{ const nm=(input.value||"").trim()||"Learner"; createProfile(nm, chosen); state.ui.addForm=false; state.screen="app"; state.tab="learn"; state.view={name:"list"}; applySettings(); render(); syncTabs(); window.scrollTo(0,0); };
+  act.appendChild(create);
+  if(state.profiles.length){ const cancel=el("button","btn","Cancel"); cancel.onclick=()=>{ state.ui.addForm=false; render(); }; act.appendChild(cancel); }
+  box.appendChild(act);
+  paint();
+  return box;
+}
+
+function renderTutorView(){
+  const box=el("div","card");
+  box.appendChild(el("div","section-label","Everyone on this device"));
+  if(!state.profiles.length){ box.appendChild(el("p","empty","No learners yet.")); return box; }
+  state.profiles.forEach(p=>{
+    const s=profileStats(p.id);
+    const row=el("div","tutorrow");
+    row.appendChild(el("div","tav",p.avatar));
+    const info=el("div","tinfo");
+    info.appendChild(el("div","tname",p.name));
+    info.appendChild(el("div","tstat","Basics "+s.basics+"/"+BASICS.length+"  ·  Grammar "+s.grammar+"/"+LESSONS.length+"  ·  "+s.quizzes+" quizzes"));
+    info.appendChild(el("div","tstat","🔥 "+s.streak+"-day streak  ·  last seen "+fmtDate(s.lastActive)));
+    row.appendChild(info);
+    const del=el("button","tdel","✕"); del.setAttribute("aria-label","Remove "+p.name);
+    del.onclick=()=>{ if(confirm("Remove "+p.name+" and their progress from this device?")){ deleteProfile(p.id); render(); } };
+    row.appendChild(del);
+    box.appendChild(row);
+  });
+  return box;
+}
+
+function renderOnboard(){
+  const o=el("div","onboard");
+  o.appendChild(el("h2",null,"Make reading comfortable"));
+  o.appendChild(el("p",null,"Pick a starting profile — you can fine-tune anything later from the Comfort button. There’s no wrong choice."));
+  const row=el("div","preset-row");
+  ["dyslexia","adhd","larger"].forEach(k=>{
+    const p=PRESETS[k], b=el("button","preset");
+    b.appendChild(el("span","pic",p.ic));
+    const tx=el("span"); tx.appendChild(el("span","pt",p.name)); tx.appendChild(el("span","ps",p.desc)); b.appendChild(tx);
+    b.onclick=()=>applyPreset(k);
+    row.appendChild(b);
+  });
+  o.appendChild(row);
+  const skip=el("button","skip","I’ll set it up myself →"); skip.onclick=()=>{ state.onboarded=true; persist(); render(); };
+  o.appendChild(skip);
+  app.appendChild(o);
+}
+
+function renderModeSwitch(){
+  const ms=el("div","modeswitch");
+  [["basics","🌱","Basics","Start here — very simple"],["grammar","📘","English grammar","The full course"]].forEach(([id,ic,t,s])=>{
+    const b=el("button","modebtn"); b.setAttribute("aria-pressed", state.mode===id);
+    b.appendChild(el("span","mi",ic));
+    const tx=el("span"); tx.appendChild(el("span","mt",t)); tx.appendChild(el("span","msub",s)); b.appendChild(tx);
+    b.onclick=()=>{ state.mode=id; if(id==="grammar" && state.level==="basics") state.level="foundation"; if(id==="basics") state.level="basics"; persist(); render(); window.scrollTo(0,0); };
+    ms.appendChild(b);
+  });
+  app.appendChild(ms);
+}
+
+function renderCards(list){
+  const done=list.filter(l=>state.completed.has(l.id)).length;
+  const strip=el("div","progress-strip"); const bar=el("div","bar"); const fill=el("i"); fill.style.width=(list.length?done/list.length*100:0)+"%"; bar.appendChild(fill);
+  strip.appendChild(el("span",null,done+"/"+list.length)); strip.appendChild(bar); app.appendChild(strip);
+  list.forEach((lesson,i)=>{
+    const c=el("button","lessoncard"+(state.completed.has(lesson.id)?" done":""));
+    c.appendChild(el("div","num", state.completed.has(lesson.id)?"✓":String(i+1)));
+    const meta=el("div","meta"); meta.appendChild(el("h3",null,lesson.title));
+    const sc=state.quizScores[lesson.id];
+    meta.appendChild(el("span",null,(lesson.estimatedMinutes||3)+" min"+(sc!=null?"  ·  quiz "+sc+"%":""))); c.appendChild(meta);
+    c.appendChild(el("div","chev","›"));
+    c.onclick=()=>{ state.view={name:"lesson",lesson,focusIdx:0}; render(); };
+    app.appendChild(c);
+  });
+}
+
+function renderList(){
+  if(!state.onboarded){ renderOnboard(); }
+  renderModeSwitch();
+
+  if(state.mode==="basics"){
+    state.level="basics";
+    const h=el("div","levelhead");
+    h.appendChild(el("h2",null,"Basics — start here 🌱"));
+    h.appendChild(el("p",null,"Tiny, simple lessons with no tricky words. Tap ▶ to hear every word read aloud."));
+    app.appendChild(h);
+    renderCards(lessonsFor("basics"));
+    return;
+  }
+
+  if(state.level==="basics") state.level="foundation";
+  const seg=el("div","segmented"); seg.setAttribute("role","tablist");
+  LEVELS.forEach(L=>{
+    const b=el("button",null,L.name); b.setAttribute("role","tab"); b.setAttribute("aria-selected",state.level===L.id);
+    b.onclick=()=>{ state.level=L.id; render(); }; seg.appendChild(b);
+  });
+  app.appendChild(seg);
+  const L=LEVELS.find(x=>x.id===state.level)||LEVELS[0];
+  const head=el("div","levelhead"); head.appendChild(el("h2",null,L.name+" grammar")); head.appendChild(el("p",null,L.blurb)); app.appendChild(head);
+  renderCards(lessonsFor(state.level));
+}
+
+/* Build readable "blocks" (dimunits): teaching blocks and example cards. */
+function buildLessonBlocks(lesson){
+  const teach=[], examples=[];
+  // summary
+  const sumRow=el("div","playrow card dimunit");
+  const sb=el("button","play sm"); sb.dataset.playkey="sum"; sb.textContent="▶"; sb.setAttribute("aria-label","Read aloud");
+  const sumText=readingBlock(lesson.summary,{readable:true}); sumText.style.fontWeight="600";
+  sb.onclick=()=>speakOn("sum",lesson.summary,sumRow); sumRow.appendChild(sb); sumRow.appendChild(sumText);
+  sumRow.onclick=(e)=>{ if(e.target!==sb) setSpotlit(unitOf(sumRow)); };
+  teach.push(sumRow);
+  // explanation
+  (lesson.explanation||[]).forEach((p,i)=>{
+    const row=el("div","playrow dimunit"); row.style.marginBottom="2px";
+    const b=el("button","play sm"); b.dataset.playkey="exp"+i; b.textContent="▶"; b.setAttribute("aria-label","Read aloud");
+    const tx=readingBlock(p,{readable:true}); b.onclick=()=>speakOn("exp"+i,p,row);
+    row.onclick=(e)=>{ if(e.target!==b) setSpotlit(unitOf(row)); };
+    row.appendChild(b); row.appendChild(tx); teach.push(row);
+  });
+  // key points (one block)
+  if((lesson.keyPoints||[]).length){
+    const kp=el("div","card dimunit");
+    kp.appendChild(el("div","section-label","Key points"));
+    lesson.keyPoints.forEach(pt=>{ const r=el("div","keypoint"); r.appendChild(el("div","dot","◆")); r.appendChild(readingBlock(pt,{readable:true})); kp.appendChild(r); });
+    kp.onclick=()=>setSpotlit(unitOf(kp));
+    teach.push(kp);
+  }
+  // examples
+  (lesson.examples||[]).forEach((ex,i)=>{
+    const card=el("div","example dimunit"); card.dataset.readable="1"; card.dataset.speak=ex.spokenText||ex.text;
+    const b=el("button","play sm"); b.dataset.playkey="ex"+i; b.textContent="▶"; b.setAttribute("aria-label","Read this example aloud");
+    const body=el("div"); body.style.flex="1";
+    if(ex.emoji) body.appendChild(el("div","ex-emoji",ex.emoji));
+    body.appendChild(readingBlock(ex.text));
+    if(ex.note) body.appendChild(el("div","note",ex.note));
+    if(ex.slowByDefault){ const s=el("div","slow"); s.textContent="🐢 reads slowly"; body.appendChild(s); }
+    b.onclick=()=>speakOn("ex"+i, ex.spokenText||ex.text, card, {slow:!!ex.slowByDefault});
+    card.onclick=(e)=>{ if(e.target!==b) setSpotlit(unitOf(card)); };
+    card.appendChild(b); card.appendChild(body); examples.push(card);
+  });
+  return {teach, examples};
+}
+
+function buildLessonActions(lesson){
+  const act=el("div","actions");
+  const done=state.completed.has(lesson.id);
+  const mc=el("button","btn"+(done?" success":""), done?"✓ Completed":"Mark complete");
+  mc.onclick=()=>{ if(state.completed.has(lesson.id)) state.completed.delete(lesson.id); else { state.completed.add(lesson.id); checkAwards(); } persist(); render(); window.scrollTo(0,0); };
+  const qz=el("button","btn primary","Take the quiz ("+(lesson.quiz||[]).length+")");
+  if(!(lesson.quiz||[]).length) qz.disabled=true;
+  qz.onclick=()=>{ state.view={name:"quiz",lesson}; render(); };
+  act.appendChild(mc); act.appendChild(qz);
+  return act;
+}
+
+function renderLesson(lesson){
+  const back=el("button","backbtn","‹ Back to lessons"); back.onclick=()=>{ state.view={name:"list"}; render(); }; app.appendChild(back);
+  const L=LEVELS.find(x=>x.id===lesson.level);
+  app.appendChild(el("div","eyebrow", L ? L.name : "Basics 🌱"));
+  app.appendChild(el("h1","lesson-title",lesson.title));
+
+  const {teach, examples}=buildLessonBlocks(lesson);
+  const blocks=teach.concat(examples);
+
+  if(state.settings.focus){
+    let idx=Math.max(0,Math.min(state.view.focusIdx||0, blocks.length-1));
+    state.view.focusIdx=idx;
+    const dots=el("div","stepdots"); blocks.forEach((_,i)=>dots.appendChild(el("span","d"+(i===idx?" on":(i<idx?" past":""))))); 
+    app.appendChild(el("div","qcount","Step "+(idx+1)+" of "+blocks.length)); app.appendChild(dots);
+    const stage=el("div","focusstage"); stage.appendChild(blocks[idx]); app.appendChild(stage);
+    const nav=el("div","actions");
+    const prev=el("button","btn","‹ Previous"); prev.disabled=idx===0; prev.onclick=()=>{ state.view.focusIdx=idx-1; render(); };
+    const isLast=idx===blocks.length-1;
+    const next=el("button","btn primary", isLast?"Done reading":"Next ›"); next.onclick=()=>{ if(!isLast){ state.view.focusIdx=idx+1; render(); window.scrollTo(0,0);} else { state.settings.focus=false; persist(); render(); } };
+    nav.appendChild(prev); nav.appendChild(next); app.appendChild(nav);
+    if(isLast) app.appendChild(buildLessonActions(lesson));
+  } else {
+    const lb=el("div","lessonbar"); lb.appendChild(el("div","label","Listen to the whole lesson"));
+    const lp=el("button","play"); lp.id="lessonPlay"; lp.textContent="▶"; lp.setAttribute("aria-label","Play whole lesson"); lp.onclick=()=>playLesson(); lb.appendChild(lp); app.appendChild(lb);
+    app.appendChild(el("div","section-label","Lesson"));
+    teach.forEach(b=>app.appendChild(b));
+    if(examples.length){ app.appendChild(el("div","section-label","Examples — tap ▶ to hear each one")); examples.forEach(b=>app.appendChild(b)); }
+    app.appendChild(buildLessonActions(lesson));
+  }
+  refreshPlayButtons();
+}
+
+function renderQuiz(lesson){
+  const qs=lesson.quiz||[]; let i=0, correct=0, answered=false;
+  const back=el("button","backbtn","‹ Back to lesson"); back.onclick=()=>{ state.view={name:"lesson",lesson,focusIdx:0}; render(); }; app.appendChild(back);
+  app.appendChild(el("h1","lesson-title","Quiz: "+lesson.title));
+  const host=el("div"); app.appendChild(host);
+  function step(){
+    host.innerHTML=""; answered=false;
+    if(i>=qs.length) return finish();
+    const q=qs[i];
+    host.appendChild(el("div","qcount","Question "+(i+1)+" of "+qs.length));
+    const card=el("div","card"); card.appendChild(el("div","qprompt",q.prompt));
+    q.options.forEach((opt,idx)=>{
+      const b=el("button","opt",opt);
+      b.onclick=()=>{
+        if(answered)return; answered=true;
+        const right=idx===q.correctIndex;
+        if(right){ b.classList.add("correct"); correct++; b.appendChild(el("span","tick","✓")); }
+        else{ b.classList.add("wrong"); card.querySelectorAll(".opt")[q.correctIndex].classList.add("correct"); }
+        const fb=el("div","feedback "+(right?"good":"bad")); fb.textContent=(right?"Correct. ":"Not quite. ")+q.explanation; card.appendChild(fb);
+        const nb=el("button","btn primary", i===qs.length-1?"See result":"Next question"); nb.style.marginTop="14px"; nb.onclick=()=>{ i++; step(); }; card.appendChild(nb);
+      };
+      card.appendChild(b);
+    });
+    host.appendChild(card);
+  }
+  function finish(){
+    const pct=qs.length?Math.round(correct/qs.length*100):0;
+    state.quizScores[lesson.id]=Math.max(state.quizScores[lesson.id]||0,pct);
+    if(state.stats) state.stats.quizzesTaken=(state.stats.quizzesTaken||0)+1;
+    if(pct>=80) state.completed.add(lesson.id);
+    checkAwards(); persist();
+    const c=el("div","card"); c.style.textAlign="center"; c.appendChild(el("div",null,"🌟")).style.fontSize="40px";
+    if(state.settings.lowp){ c.appendChild(el("h2",null,"Nice work!")); c.appendChild(el("p",null,"You finished the quiz. Every round helps it stick — keep going at your own pace.")); }
+    else { c.appendChild(el("h2",null,pct+"%")); c.appendChild(el("p",null,correct+" of "+qs.length+" correct. "+(pct>=80?"Great grasp of this one!":"Good effort — revisit the lesson and try again any time."))); }
+    const act=el("div","actions");
+    const again=el("button","btn","Try again"); again.onclick=()=>{ state.view={name:"quiz",lesson}; render(); };
+    const home=el("button","btn primary","Back to lessons"); home.onclick=()=>{ state.view={name:"list"}; state.tab="learn"; render(); syncTabs(); };
+    act.appendChild(again); act.appendChild(home); c.appendChild(act); host.innerHTML=""; host.appendChild(c);
+  }
+  step();
+}
+
+/* ===== Awards ======================================================== */
+function badgeDefs(){
+  const total=ALL.length, done=ALL.filter(l=>state.completed.has(l.id)).length;
+  const perfect=Object.values(state.quizScores).filter(s=>s>=100).length;
+  const levelDone=id=>{ const ls=lessonsFor(id); return ls.length>0 && ls.every(l=>state.completed.has(l.id)); };
+  const basicsAny=lessonsFor("basics").some(l=>state.completed.has(l.id));
+  return [
+    {ic:"⭐",t:"First Word",d:"Finish your first Basics lesson",got:basicsAny},
+    {ic:"🌈",t:"Basics Star",d:"Complete every Basics lesson",got:levelDone("basics")},
+    {ic:"🌱",t:"First Steps",d:"Finish 3 lessons",got:done>=3},
+    {ic:"🔥",t:"Warming Up",d:"Finish 6 lessons",got:done>=6},
+    {ic:"🧱",t:"Foundation Builder",d:"Complete every Foundation lesson",got:levelDone("foundation")},
+    {ic:"📈",t:"Steady Climber",d:"Finish half of everything",got:done>=Math.ceil(total/2)},
+    {ic:"🎯",t:"Sharp Eye",d:"Score 100% on a quiz",got:perfect>=1},
+    {ic:"🧠",t:"Grammar Pro",d:"Complete every Intermediate lesson",got:levelDone("intermediate")},
+    {ic:"🎓",t:"Top of the Class",d:"Complete every Advanced lesson",got:levelDone("advanced")},
+    {ic:"🏆",t:"All Done",d:"Finish all "+total+" lessons",got:done>=total},
+  ];
+}
+let awardSeen=new Set();
+function checkAwards(){
+  const newly=badgeDefs().filter(b=>b.got&&!awardSeen.has(b.t));
+  newly.forEach(b=>awardSeen.add(b.t));
+  if(newly.length){ if(state.currentProfileId) store.set(pkey("awards"),[...awardSeen]); toast(newly[0].ic+"  Badge unlocked: "+newly[0].t); }
+}
+function renderAwards(){
+  const total=ALL.length, done=ALL.filter(l=>state.completed.has(l.id)).length;
+  const c=el("div","card"); c.style.textAlign="center"; c.appendChild(el("div",null,done>=total?"🏆":"📚")).style.fontSize="40px";
+  c.appendChild(el("h2",null,done+" of "+total+" lessons complete"));
+  c.appendChild(el("p",null,done>=total?"You’ve finished everything. Outstanding!":"Keep going — small, steady sessions add up.")); app.appendChild(c);
+  const certs=[];
+  const allDone=id=>{ const ls=lessonsFor(id); return ls.length>0 && ls.every(l=>state.completed.has(l.id)); };
+  if(allDone("basics")) certs.push(["Basics Certificate","Learned the very first building blocks 🌱"]);
+  if(allDone("foundation")) certs.push(["Foundation Certificate","Mastered the building blocks of grammar"]);
+  if(allDone("intermediate")) certs.push(["Intermediate Certificate","Confident with tenses, punctuation and structure"]);
+  if(allDone("advanced")) certs.push(["Advanced Certificate","Polished, stylish, accurate writing"]);
+  if(done>=total) certs.push(["Course Diploma","Completed the full GrammarGuru course"]);
+  if(certs.length){ app.appendChild(el("div","section-label","Certificates")); certs.forEach(([t,s])=>{ const cc=el("div","cert"); cc.appendChild(el("div","seal","🏅")); cc.appendChild(el("h3",null,t)); cc.appendChild(el("p",null,s)); app.appendChild(cc); }); }
+  app.appendChild(el("div","section-label","Badges"));
+  const grid=el("div","badgegrid");
+  badgeDefs().forEach(b=>{ const card=el("div","badge"+(b.got?"":" locked")); card.appendChild(el("div","ic",b.got?b.ic:"🔒")); card.appendChild(el("h4",null,b.t)); card.appendChild(el("p",null,b.d)); grid.appendChild(card); });
+  app.appendChild(grid);
+}
+
+/* ===== Speak & Check (mic + British English correction) ============= */
+const SR = (typeof window!=="undefined") ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
+let recog=null, recognising=false;
+
+/* Common American → British spellings for the offline fallback check. */
+const US_UK = {
+  color:"colour",colors:"colours",colour:"colour",favorite:"favourite",favorites:"favourites",
+  honor:"honour",honour:"honour",neighbor:"neighbour",neighbors:"neighbours",behavior:"behaviour",
+  flavor:"flavour",flavors:"flavours",labor:"labour",rumor:"rumour",humor:"humour",
+  organize:"organise",organized:"organised",organizing:"organising",realize:"realise",realized:"realised",
+  recognize:"recognise",recognized:"recognised",apologize:"apologise",analyze:"analyse",analyzed:"analysed",
+  center:"centre",centers:"centres",theater:"theatre",meter:"metre",liter:"litre",fiber:"fibre",
+  traveling:"travelling",traveled:"travelled",traveler:"traveller",canceled:"cancelled",canceling:"cancelling",
+  modeling:"modelling",labeled:"labelled",jewelry:"jewellery",defense:"defence",offense:"offence",
+  license:"licence",practice:"practise",gray:"grey",mom:"mum",moms:"mums",airplane:"aeroplane",
+  cozy:"cosy",plow:"plough",check:"cheque",pajamas:"pyjamas",aluminum:"aluminium",program:"programme",
+  catalog:"catalogue",dialog:"dialogue",donut:"doughnut",tire:"tyre",curb:"kerb"
+};
+const COMMON_GRAMMAR = [
+  [/\b(could|would|should|must|might)\s+of\b/gi, (m,w)=>w+" have", "Use “"+"have"+"” not “of” after could/would/should."],
+  [/\bi\b/g, "I", "“I” should always be a capital letter."],
+  [/\byour\s+welcome\b/gi, "you're welcome", "“You’re” = “you are”."],
+  [/\bshould of\b/gi, "should have", "“Should have”, not “should of”."],
+  [/\balot\b/gi, "a lot", "“A lot” is two words."],
+  [/\bdefinately\b/gi, "definitely", "Spelling: definitely."],
+  [/\bseperate\b/gi, "separate", "Spelling: separate."],
+  [/\brecieve\b/gi, "receive", "Spelling: receive (i before e, except after c)."],
+  [/\bteh\b/gi, "the", "Spelling: the."]
+];
+
+function localCheck(text){
+  const issues=[];
+  let corrected=text;
+  // spelling swaps (whole word, keep capitalisation)
+  corrected = corrected.replace(/\b[A-Za-z]+\b/g, (w)=>{
+    const low=w.toLowerCase();
+    if(US_UK[low] && US_UK[low]!==low){
+      const uk=US_UK[low];
+      const cased = w[0]===w[0].toUpperCase() ? uk.charAt(0).toUpperCase()+uk.slice(1) : uk;
+      issues.push({type:"Spelling (British)", from:w, to:cased, note:"British English uses “"+cased+"”."});
+      return cased;
+    }
+    return w;
+  });
+  COMMON_GRAMMAR.forEach(([re,rep,note])=>{
+    corrected = corrected.replace(re, (...args)=>{
+      const m=args[0]; const out = typeof rep==="function"?rep(...args):rep;
+      if(out!==m) issues.push({type:"Grammar", from:m, to:out, note});
+      return out;
+    });
+  });
+  // tidy: capital after full stop, capital at very start
+  corrected = corrected.replace(/(^\s*|[.!?]\s+)([a-z])/g, (m,p,c)=>p+c.toUpperCase());
+  return {corrected, issues, engine:"offline"};
+}
+
+async function checkBritishEnglish(text){
+  // Try LanguageTool (purpose-built British English checker) first.
+  try{
+    const body = new URLSearchParams({ text, language:"en-GB" });
+    const res = await fetch("https://api.languagetool.org/v2/check", {
+      method:"POST",
+      headers:{ "Content-Type":"application/x-www-form-urlencoded" },
+      body: body.toString()
+    });
+    if(!res.ok) throw new Error("status "+res.status);
+    const data = await res.json();
+    const matches = (data.matches||[]).slice().sort((a,b)=>a.offset-b.offset);
+    // build corrected text applying first replacement of non-overlapping matches (back to front)
+    let corrected=text; const issues=[];
+    const applied=[...matches].sort((a,b)=>b.offset-a.offset);
+    let lastStart=Infinity;
+    applied.forEach(m=>{
+      const rep = (m.replacements&&m.replacements[0]&&m.replacements[0].value);
+      const end=m.offset+m.length;
+      if(rep!=null && end<=lastStart){
+        corrected = corrected.slice(0,m.offset)+rep+corrected.slice(end);
+        lastStart=m.offset;
+      }
+    });
+    matches.forEach(m=>{
+      issues.push({
+        type: (m.rule && m.rule.category && m.rule.category.name) || "Suggestion",
+        from: text.substr(m.offset, m.length),
+        to: (m.replacements&&m.replacements[0]&&m.replacements[0].value)||"",
+        note: m.message
+      });
+    });
+    return {corrected, issues, engine:"languagetool"};
+  }catch(e){
+    return localCheck(text);
+  }
+}
+
+function stopRecog(){ if(recog){ try{ recog.stop(); }catch(e){} } recognising=false; }
+
+/* Why might the mic be unavailable here? Returns a help string or null. */
+function micBlockReason(){
+  if(!SR) return "Live dictation isn’t supported in this browser. Use <b>Chrome</b> or <b>Safari</b> — or type your text below and still check it.";
+  let embedded=false; try{ embedded = window.self!==window.top; }catch(e){ embedded=true; }
+  if(embedded) return "The microphone is blocked because this is running inside a preview frame. <b>Open the file in your own browser</b> (download it, or use your hosted link) and the mic will work.";
+  if(window.isSecureContext===false) return "The mic needs a secure page. Open this over <b>https</b> (host it), or open the file directly in your browser.";
+  return null;
+}
+async function requestMic(){
+  try{
+    if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
+      const s=await navigator.mediaDevices.getUserMedia({audio:true});
+      s.getTracks().forEach(t=>t.stop()); // we only needed the permission
+      return true;
+    }
+  }catch(e){ return false; }
+  return true; // no mediaDevices API — let SpeechRecognition try anyway
+}
+
+function renderSpeak(){
+  app.appendChild(el("h1","lesson-title","Speak & Check 🎤"));
+  app.appendChild(el("p","authsub","Tap the mic and talk, or just type. Then check your British English — spelling and grammar.")).style.textAlign="left";
+
+  const card=el("div","card");
+  // mic + status
+  const micWrap=el("div","micwrap");
+  const mic=el("button","micbtn"); mic.id="micBtn"; mic.textContent="🎤"; mic.setAttribute("aria-label","Start talking");
+  const status=el("div","micstatus"); status.id="micStatus";
+  const reason=micBlockReason();
+  status.textContent = reason ? "Typing works — mic needs a quick fix 👇" : "Tap to talk";
+  micWrap.appendChild(mic); micWrap.appendChild(status);
+  card.appendChild(micWrap);
+  if(reason){ const b=el("div","micbanner"); b.innerHTML="🎤 "+reason; card.appendChild(b); }
+
+  // editable transcript
+  const ta=document.createElement("textarea"); ta.className="speakbox"; ta.id="speakText"; ta.rows=5;
+  ta.placeholder="Your words will appear here. You can edit or type your own…";
+  ta.value = state.speakText || "";
+  ta.oninput=()=>{ state.speakText=ta.value; };
+  card.appendChild(ta);
+
+  const row=el("div","actions");
+  const check=el("button","btn primary","✓ Check my English");
+  check.onclick=()=>runCheck();
+  const readback=el("button","btn","🔊 Read it back");
+  readback.onclick=()=>{ const t=(byId("speakText").value||"").trim(); if(t) speakOn("speakread", t, null); };
+  const clear=el("button","btn","Clear");
+  clear.onclick=()=>{ state.speakText=""; state.speakResult=null; byId("speakText").value=""; renderSpeakResult(); };
+  row.appendChild(check); row.appendChild(readback); row.appendChild(clear);
+  card.appendChild(row);
+  app.appendChild(card);
+
+  const results=el("div"); results.id="speakResults"; app.appendChild(results);
+  renderSpeakResult();
+
+  // wire mic
+  if(SR){
+    mic.onclick=async ()=>{
+      if(recognising){ stopRecog(); mic.classList.remove("on"); status.textContent="Tap to talk"; return; }
+      status.textContent="Asking for microphone…";
+      const ok=await requestMic();
+      if(!ok){ status.textContent="Microphone blocked. Tap the 🔒 or ⓘ in the address bar → allow Microphone → reload."; return; }
+      try{
+        recog=new SR(); recog.lang="en-GB"; recog.interimResults=true; recog.continuous=true;
+        let base=(byId("speakText").value||"");
+        recog.onstart=()=>{ recognising=true; mic.classList.add("on"); status.textContent="Listening… tap to stop"; };
+        recog.onerror=(e)=>{
+          const map={ "not-allowed":"Microphone blocked. Allow it via the 🔒/ⓘ in the address bar, then reload.",
+            "service-not-allowed":"Your browser won’t allow dictation here. Open the file directly in Chrome or Safari.",
+            "audio-capture":"No microphone found. Check it’s connected and not in use by another app.",
+            "network":"Dictation needs an internet connection.",
+            "no-speech":"Didn’t hear anything — tap and try again." };
+          status.textContent = map[e.error] || "Didn’t catch that — try again.";
+          mic.classList.remove("on"); recognising=false;
+        };
+        recog.onend=()=>{ recognising=false; mic.classList.remove("on"); if(status.textContent==="Listening… tap to stop") status.textContent="Tap to talk"; };
+        recog.onresult=(e)=>{
+          let interim="", finalT="";
+          for(let i=e.resultIndex;i<e.results.length;i++){ const r=e.results[i]; if(r.isFinal) finalT+=r[0].transcript; else interim+=r[0].transcript; }
+          if(finalT){ base=(base?base+" ":"")+finalT.trim(); }
+          const box=byId("speakText"); if(box){ box.value=(base+(interim?" "+interim:"")).replace(/\s+/g," "); state.speakText=box.value; }
+        };
+        stopSpeech(); recog.start();
+      }catch(err){ status.textContent="Couldn’t start the mic here. Try opening the file directly in Chrome or Safari."; }
+    };
+  } else {
+    mic.disabled=true; mic.style.opacity=".5";
+  }
+}
+
+async function runCheck(){
+  const t=(byId("speakText").value||"").trim();
+  const results=byId("speakResults");
+  if(!t){ state.speakResult=null; renderSpeakResult(); return; }
+  results.innerHTML=""; results.appendChild(el("div","qcount","Checking your British English…"));
+  const r=await checkBritishEnglish(t);
+  state.speakResult=r; renderSpeakResult();
+}
+
+function renderSpeakResult(){
+  const host=byId("speakResults"); if(!host) return; host.innerHTML="";
+  const r=state.speakResult; if(!r) return;
+  // corrected text card
+  const c1=el("div","card");
+  c1.appendChild(el("div","section-label", r.issues.length ? "Corrected (British English)" : "Looks good! ✅"));
+  const corr=el("div","reading"); corr.textContent=r.corrected; corr.style.fontWeight="500"; c1.appendChild(corr);
+  const ra=el("div","actions");
+  const hear=el("button","btn","🔊 Hear the correct version"); hear.onclick=()=>speakOn("corr", r.corrected, null);
+  const use=el("button","btn","Use this"); use.onclick=()=>{ byId("speakText").value=r.corrected; state.speakText=r.corrected; toast("Updated ✓"); };
+  ra.appendChild(hear); ra.appendChild(use); c1.appendChild(ra);
+  host.appendChild(c1);
+
+  if(r.issues.length){
+    const c2=el("div","card");
+    c2.appendChild(el("div","section-label", r.issues.length+" thing"+(r.issues.length===1?"":"s")+" to fix"));
+    r.issues.slice(0,40).forEach(it=>{
+      const row=el("div","fixrow");
+      const head=el("div","fixhead");
+      if(it.from){ const a=el("span","fixfrom",it.from); head.appendChild(a); head.appendChild(el("span","fixarrow"," → ")); }
+      if(it.to){ head.appendChild(el("span","fixto",it.to)); }
+      row.appendChild(head);
+      row.appendChild(el("div","fixnote", (it.type?it.type+": ":"")+(it.note||"")));
+      c2.appendChild(row);
+    });
+    host.appendChild(c2);
+  }
+  host.appendChild(el("p","authnote", r.engine==="languagetool"
+    ? "Checked with LanguageTool (British English)."
+    : "Checked offline with a quick British‑English check. Connect to the internet for a deeper grammar check."));
+}
+
+
+function syncTabs(){ document.querySelectorAll("#tabbar button").forEach(b=>b.setAttribute("aria-current",b.dataset.tab===state.tab)); }
+document.querySelectorAll("#tabbar button").forEach(b=>{ b.onclick=()=>{ state.tab=b.dataset.tab; render(); syncTabs(); window.scrollTo(0,0); }; });
+
+/* ===== Settings ===================================================== */
+function applySettings(){
+  const s=state.settings, r=document.documentElement.style;
+  r.setProperty("--reading-size",s.size+"px");
+  r.setProperty("--reading-line",s.line);
+  r.setProperty("--reading-letter",s.letter+"px");
+  r.setProperty("--reading-word",s.word+"px");
+  document.body.dataset.font=s.font;
+  document.body.dataset.tint=s.tint==="none"?"":s.tint;
+  document.body.classList.toggle("calm",s.calm);
+  document.body.classList.toggle("contrast",s.contrast);
+  // reflect controls
+  if(byId("sizeR")){
+    byId("sizeR").value=s.size; byId("lineR").value=s.line; byId("letterR").value=s.letter; byId("wordR").value=s.word;
+    byId("fontSel").value=s.font; byId("bionicT").checked=s.bionic; byId("contrastT").checked=s.contrast;
+    byId("hlT").checked=s.highlight; byId("rateR").value=s.rate; byId("pitchR").value=s.pitch;
+    byId("calmT").checked=s.calm; byId("lowpT").checked=s.lowp; byId("focusT").checked=s.focus; byId("spotT").checked=s.spotlight;
+    document.querySelectorAll(".swatch").forEach(sw=>sw.setAttribute("aria-pressed",sw.dataset.tint===s.tint));
+  }
+  updatePreview();
+}
+function updatePreview(){
+  const p=byId("previewText"); if(!p) return; p.innerHTML=""; p.appendChild(renderReading("Good writing starts with clear, confident grammar."));
+}
+function applyPreset(name){
+  Object.assign(state.settings, PRESETS[name].s);
+  state.onboarded=true; persist(); applySettings(); render(); syncTabs();
+  toast(PRESETS[name].ic+"  "+PRESETS[name].name+" applied");
+}
+
+/* build preset chips in sheet */
+(function buildPresetMini(){
+  const host=byId("presetMini");
+  ["dyslexia","adhd","larger","reset"].forEach(k=>{ const p=PRESETS[k]; const b=el("button"); b.innerHTML=""; b.appendChild(el("span",null,p.ic)); b.appendChild(el("span",null,p.name)); b.onclick=()=>applyPreset(k); host.appendChild(b); });
+})();
+
+/* tints */
+const TINTS=[["none","Default","#FFFFFF"],["cream","Cream","#FBF7EC"],["sepia","Sepia","#F6EEDF"],["mint","Mint","#F1F8F3"],["lowblue","Low blue","#F6F3EA"],["dark","Dark","#1E1F28"]];
+(function buildTints(){ const row=byId("tintRow"); TINTS.forEach(([id,label,col])=>{ const b=el("button","swatch"); b.dataset.tint=id; b.style.background=col; b.setAttribute("aria-label",label); b.appendChild(el("span",null,label)); b.onclick=()=>{ state.settings.tint=id; persist(); applySettings(); }; row.appendChild(b); }); })();
+
+function openSheet(o){ byId("scrim").classList.toggle("open",o); byId("sheet").classList.toggle("open",o); }
+byId("settingsBtn").onclick=()=>openSheet(true);
+byId("closeSheet").onclick=()=>openSheet(false);
+byId("scrim").onclick=()=>openSheet(false);
+byId("profileBtn").onclick=()=>{ stopSpeech(); if(CLOUD && cloud.user){ state.screen="account"; } else { state.ui.addForm=false; state.ui.tutor=false; state.screen="profiles"; } render(); window.scrollTo(0,0); };
+
+byId("fontSel").onchange=e=>{ state.settings.font=e.target.value; persist(); applySettings(); render(); };
+byId("sizeR").oninput=e=>{ state.settings.size=+e.target.value; applySettings(); persist(); };
+byId("lineR").oninput=e=>{ state.settings.line=+e.target.value; applySettings(); persist(); };
+byId("letterR").oninput=e=>{ state.settings.letter=+e.target.value; applySettings(); persist(); };
+byId("wordR").oninput=e=>{ state.settings.word=+e.target.value; applySettings(); persist(); };
+byId("bionicT").onchange=e=>{ state.settings.bionic=e.target.checked; persist(); applySettings(); render(); };
+byId("contrastT").onchange=e=>{ state.settings.contrast=e.target.checked; persist(); applySettings(); };
+byId("hlT").onchange=e=>{ state.settings.highlight=e.target.checked; persist(); };
+byId("focusT").onchange=e=>{ state.settings.focus=e.target.checked; persist(); if(state.view.name==="lesson"){state.view.focusIdx=0;} render(); };
+byId("spotT").onchange=e=>{ state.settings.spotlight=e.target.checked; persist(); if(!e.target.checked) setSpotlit(null); };
+byId("rateR").oninput=e=>{ state.settings.rate=+e.target.value; persist(); };
+byId("pitchR").oninput=e=>{ state.settings.pitch=+e.target.value; persist(); };
+byId("voiceSel").onchange=e=>{ state.settings.voice=e.target.value||null; persist(); };
+byId("calmT").onchange=e=>{ state.settings.calm=e.target.checked; applySettings(); persist(); };
+byId("lowpT").onchange=e=>{ state.settings.lowp=e.target.checked; persist(); };
+byId("testVoice").onclick=()=>{ if(!synth) return toast("Speech isn’t available in this browser."); synth.cancel(); const u=new SpeechSynthesisUtterance("Great writing starts with clear, confident grammar."); const v=chosenVoice(); if(v)u.voice=v; u.lang=(v&&v.lang)||"en-GB"; u.rate=state.settings.rate; u.pitch=state.settings.pitch; synth.speak(u); };
+
+/* ===== Boot ========================================================== */
+async function boot(){
+  if(CLOUD){
+    state.screen="cloudauth"; applySettings(); render();
+    try{
+      const { data:{ session } } = await sb.auth.getSession();
+      if(session && session.user){ await cloudEnter(session.user); }
+    }catch(e){ console.error(e); }
+    try{ sb.auth.onAuthStateChange((ev)=>{ if(ev==="SIGNED_OUT"){ cloud.user=null; state.currentProfileId=null; state.screen="cloudauth"; render(); } }); }catch(e){}
+  } else {
+    if(state.currentProfileId && state.profiles.some(p=>p.id===state.currentProfileId)){ loadProfile(state.currentProfileId); state.screen="app"; }
+    else { state.currentProfileId=null; state.screen="profiles"; }
+    applySettings(); render(); syncTabs();
+  }
+}
+boot().catch(function(e){ if(window.__ggShowFatal) window.__ggShowFatal((e&&e.message)||String(e)); });
+window.addEventListener("pagehide",()=>{ if(synth) synth.cancel(); });
+</script>
+</body>
+</html>
